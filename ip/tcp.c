@@ -42,7 +42,6 @@
 #define     send_syn_ack(p)     send_segment(p, (TCP_FLAG_SYN+TCP_FLAG_ACK))
 #define     send_ack(p)         send_segment(p, TCP_FLAG_ACK)
 #define     send_fin_ack(p)     send_segment(p, (TCP_FLAG_FIN+TCP_FLAG_ACK))
-#define     send_rst(p)         send_segment(p, TCP_FLAG_RST)
 
 #if DEBUG_ON
 #define     set_state(p,s)      {                                                                                        \
@@ -110,8 +109,9 @@ uint8_t             recvBuff[TCP_PCB_COUNT][TCP_DATA_BUF_SIZE]; // set of receiv
 static void      tcp_input_handler(struct pbuf_t* const);
 static pcbid_t   find_pcb(pcb_state_t, ip4_addr_t, uint16_t, ip4_addr_t, uint16_t);
 static ip4_err_t send_segment(pcbid_t, uint16_t);
+static ip4_err_t send_rst_segment(ip4_addr_t, uint16_t, ip4_addr_t, uint16_t, uint32_t, uint32_t, uint16_t, uint16_t);
 static void      get_tcp_opt(uint8_t, uint8_t*, struct tcp_opt_t*);
-static uint32_t  pseudo_header_sum(pcbid_t, uint16_t);
+static uint32_t  pseudo_header_sum(ip4_addr_t, ip4_addr_t, uint16_t);
 static void      tcp_timeout_handler(uint32_t);
 static void      free_tcp_pcb(pcbid_t);
 
@@ -665,6 +665,7 @@ static void tcp_input_handler(struct pbuf_t* const p)
     uint16_t            portLocal, portRemote;
     uint16_t            flags;
     uint16_t            dataOff;
+    uint16_t            segLen;
     pcbid_t             pcbId, newConnPcb;
     int                 bytes, i;
     ip4_err_t           result;
@@ -681,6 +682,9 @@ static void tcp_input_handler(struct pbuf_t* const p)
     addrRemote = ip->srcIp;                                                             // extract source IP and port
     portRemote = stack_ntoh(tcp->srcPort);
 
+    dataOff = 4 * (stack_ntoh(tcp->dataOffsAndFlags) >> 12);
+    segLen = p->len - FRAME_HDR_LEN - ((ip->verHeaderLength & 0x0f) * 4) - dataOff;
+
     /* TODO run TCP checksum test and drop packet if
      * TCP checksum does not match.
      */
@@ -696,27 +700,44 @@ static void tcp_input_handler(struct pbuf_t* const p)
         pcbId = find_pcb(LISTEN, addrLocal, portLocal, IP4_ADDR_ANY, 0);                    // try to find a LISTENing PCB
         if ( pcbId < 0 )                                                                    // can only have one match, so if not found
             {
-                /* TODO all data in the incoming segment is discarded.
+                /* all data in the incoming segment is discarded.
                  * An incoming segment containing a RST is discarded.
-                 * An incoming segment not containing a RST causes a RST
+                 */
+                if ( flags & TCP_FLAG_RST )
+                    return;
+
+                /* An incoming segment not containing a RST causes a RST
                  * to be sent in response. The acknowledgment and sequence
                  * field values are selected to make the reset sequence acceptable
                  * to the TCP that sent the offending segment.
-                 * If the ACK bit is off, sequence number zero is used,
-                 *      <SEQ=0><ACK=SEG.SEQ+SEG.LEN><CTL=RST,ACK>
                  * If the ACK bit is on,
                  *      <SEQ=SEG.ACK><CTL=RST>
+                 * If the ACK bit is off, sequence number zero is used,
+                 *      <SEQ=0><ACK=SEG.SEQ+SEG.LEN><CTL=RST,ACK>
                  */
+                if ( flags & TCP_FLAG_ACK )
+                {
+                    send_rst_segment(addrLocal, portLocal, addrRemote, portRemote,
+                                     stack_ntoh(tcp->ack), 0L,
+                                     TCP_DEF_WINDOW,
+                                     TCP_FLAG_RST);
+                }
+                else
+                {
+                    send_rst_segment(addrLocal, portLocal, addrRemote, portRemote,
+                                     0L, stack_ntoh(tcp->seq) + segLen,
+                                     TCP_DEF_WINDOW,
+                                     TCP_FLAG_RST + TCP_FLAG_ACK);
+                }
                 return;                                                                     // drop the packet
             }
     }                                                                                       // otherwise pcbId is a PCB matching the incoming segment
 
     flags = stack_ntoh(tcp->dataOffsAndFlags) & FLAGS_MASK;                                 // extract the rest of the segment info
-    dataOff = 4 * (stack_ntoh(tcp->dataOffsAndFlags) >> 12);
 
     tcpPCB[pcbId].SEG_SEQ = stack_ntohl(tcp->seq);
     tcpPCB[pcbId].SEG_ACK = stack_ntohl(tcp->ack);
-    tcpPCB[pcbId].SEG_LEN = p->len - FRAME_HDR_LEN - ((ip->verHeaderLength & 0x0f) * 4) - dataOff;  // number of bytes occupied by the data in the segment
+    tcpPCB[pcbId].SEG_LEN = segLen;                                                         // number of bytes occupied by the data in the segment
     tcpPCB[pcbId].SEG_WND = stack_ntoh(tcp->window);
     tcpPCB[pcbId].SEG_UP  = stack_ntoh(tcp->urgentPtr);
 
@@ -739,7 +760,10 @@ static void tcp_input_handler(struct pbuf_t* const p)
              * The RST should be formatted as follows:
              *      <SEQ=SEG.ACK><CTL=RST>
              */
-            send_rst(pcbId);
+            send_rst_segment(addrLocal, portLocal, addrRemote, portRemote,
+                             stack_ntoh(tcp->ack), 0L,
+                             TCP_DEF_WINDOW,
+                             TCP_FLAG_RST);
             return;
         }
 
@@ -788,7 +812,7 @@ static void tcp_input_handler(struct pbuf_t* const p)
     {
         if ( flags & TCP_FLAG_ACK )                                                         // first check for an ACK
         {
-            /* if the ACK bit is set and if SEG.ACK =< ISS, or SEG.ACK > SND.NXT,
+            /* first, if the ACK bit is set and if SEG.ACK =< ISS, or SEG.ACK > SND.NXT,
              * send a reset (unless the RST bit is set, if so drop the segment and return)
              * <SEQ=SEG.ACK><CTL=RST> and discard the segment.
              * TODO Errata ID: 3300
@@ -801,7 +825,10 @@ static void tcp_input_handler(struct pbuf_t* const p)
                     return;
                 else
                 {
-                    send_rst(pcbId);                                                        // send reset <SEQ=SEG.ACK><CTL=RST>
+                    send_rst_segment(addrLocal, portLocal, addrRemote, portRemote,          // send reset <SEQ=SEG.ACK><CTL=RST>
+                                     stack_ntoh(tcp->ack), 0L,
+                                     TCP_DEF_WINDOW,
+                                     TCP_FLAG_RST);
                     return;
                 }
             }
@@ -809,7 +836,6 @@ static void tcp_input_handler(struct pbuf_t* const p)
             if ( tcpPCB[pcbId].SEG_ACK < tcpPCB[pcbId].SND_UNA ||                           // is ACK acceptable number range?
                  tcpPCB[pcbId].SEG_ACK > tcpPCB[pcbId].SND_NXT )
             {
-                send_rst(pcbId);                                                            // TODO send reset? <SEQ=SEG.ACK><CTL=RST>
                 return;
             }
         }
@@ -830,7 +856,7 @@ static void tcp_input_handler(struct pbuf_t* const p)
              */
         }
 
-        /* if the RST bit is set then signal the user "error:
+        /* second, if the RST bit is set then signal the user "error:
          * connection reset", drop the segment, enter CLOSED state,
          * delete TCB, and return.  Otherwise (no ACK) drop the segment
          * and return.
@@ -950,7 +976,10 @@ static void tcp_input_handler(struct pbuf_t* const p)
          */
         if ( flags & TCP_FLAG_SYN )
         {
-            send_rst(pcbId);
+            send_rst_segment(addrLocal, portLocal, addrRemote, portRemote,
+                             stack_ntoh(tcp->ack), 0L,
+                             TCP_DEF_WINDOW,
+                             TCP_FLAG_RST);
             send_sig(pcbId,TCP_EVENT_REMOTE_RST);
             free_tcp_pcb(pcbId);
             return;
@@ -977,7 +1006,10 @@ static void tcp_input_handler(struct pbuf_t* const p)
                 }
                 else
                 {
-                    send_rst(pcbId);                                                        // send reset if segment is not valid
+                    send_rst_segment(addrLocal, portLocal, addrRemote, portRemote,          // send reset <SEQ=SEG.ACK><CTL=RST>
+                                     stack_ntoh(tcp->ack), 0L,
+                                     TCP_DEF_WINDOW,
+                                     TCP_FLAG_RST);
                     return;
                 }
                 break;
@@ -1333,27 +1365,6 @@ static ip4_err_t send_segment(pcbid_t pcbId, uint16_t flags)
 
     tcpPCB[pcbId].SND_opt.time = stack_time();                                          // set this up here, this is a common point for all 'send's
 
-    /* handle reset segments separately
-     * no need to queue these for retransmission
-     * so the pbuf is used and then reclaimed
-     */
-    if ( flags & TCP_FLAG_RST )                                                         // send a reset segment
-    {
-        tcp->seq = stack_htonl(tcpPCB[pcbId].SEG_ACK);                                  // send the reset with the last ACK number
-        tcp->ack = 0;
-        tcp->dataOffsAndFlags = stack_hton((5<<12) + flags);                            // simple segment with no options
-
-        pseudoHdrSum = pseudo_header_sum(pcbId, TCP_HDR_LEN);                           // calculate pseudo-header checksum
-        checksumTemp = stack_checksumEx(tcp, TCP_HDR_LEN, pseudoHdrSum);
-        tcp->checksum = ~checksumTemp;
-
-        p->len = FRAME_HDR_LEN + IP_HDR_LEN + TCP_HDR_LEN;                              // set packet length
-        result = ip4_output(tcpPCB[pcbId].remoteIP, IP4_TCP, p);                        // transmit the TCP segment
-        pbuf_free(p);
-
-        return result;
-    }
-
     /* before building a segment to send, check if that segment will
      * need to be queued: i.e. will carry data and/or have flags other that ACK.
      * if the segment will need to be queued, then check if there is room in the send queue
@@ -1406,7 +1417,7 @@ static ip4_err_t send_segment(pcbid_t pcbId, uint16_t flags)
         synOpt->tsEcho = stack_htonl(tcpPCB[pcbId].RCV_opt.time);
         synOpt->endOfOpt = 0;                                                           // padding
 
-        pseudoHdrSum = pseudo_header_sum(pcbId, TCP_HDR_LEN + SYN_OPT_BYTES);           // calculate pseudo-header checksum
+        pseudoHdrSum = pseudo_header_sum(tcpPCB[pcbId].localIP, tcpPCB[pcbId].remoteIP, TCP_HDR_LEN + SYN_OPT_BYTES); // calculate pseudo-header checksum
         checksumTemp = stack_checksumEx(tcp, TCP_HDR_LEN + SYN_OPT_BYTES, pseudoHdrSum);
         tcp->checksum = ~checksumTemp;
 
@@ -1445,7 +1456,7 @@ static ip4_err_t send_segment(pcbid_t pcbId, uint16_t flags)
             flags |= TCP_FLAG_PSH;                                                      // TODO: always push
         }
 
-        pseudoHdrSum = pseudo_header_sum(pcbId, TCP_HDR_LEN + OPT_BYTES + sendCount);   // calculate pseudo-header checksum
+        pseudoHdrSum = pseudo_header_sum(tcpPCB[pcbId].localIP, tcpPCB[pcbId].remoteIP, TCP_HDR_LEN + OPT_BYTES + sendCount); // calculate pseudo-header checksum
         checksumTemp = stack_checksumEx(tcp, TCP_HDR_LEN + OPT_BYTES  + sendCount, pseudoHdrSum);
         tcp->checksum = ~checksumTemp;
 
@@ -1487,6 +1498,61 @@ static ip4_err_t send_segment(pcbid_t pcbId, uint16_t flags)
     return result;
 }
 
+/*------------------------------------------------
+ * send_rst_segment()
+ *
+ *  this function sends a TCP Reset (RST) segment and flags.
+ *
+ * param:  (...) segment flags (TCP_FLAG_ACK)
+ * return: ERR_OK if no errors or ip4_err_t with error code
+ *
+ */
+static ip4_err_t send_rst_segment(ip4_addr_t srcIP, uint16_t srcPort,
+                                  ip4_addr_t tgtIP, uint16_t tgtPort,
+                                  uint32_t seq, uint32_t ack, uint16_t window, uint16_t flags)
+{
+    ip4_err_t           result = ERR_OK;
+    struct pbuf_t      *p;
+    struct tcp_t       *tcp;
+    uint16_t            checksumTemp = 0;
+    uint32_t            pseudoHdrSum;
+
+#if DEBUG_ON
+    printf("-> %s()\n", __func__);
+#endif
+
+    /* allocate a transmit buffer
+     * exit here is error
+     */
+    p = pbuf_allocate();
+    if ( p == NULL )
+        return ERR_MEM;
+
+    /* prepare the TCP segment content
+     */
+    tcp = (struct tcp_t*) &(p->pbuf[FRAME_HDR_LEN + IP_HDR_LEN]);
+    tcp->srcPort = stack_hton(srcPort);
+    tcp->destPort = stack_hton(tgtPort);
+    tcp->window = stack_hton(window);
+    tcp->checksum = 0;
+    tcp->urgentPtr = 0;
+    tcp->seq = stack_htonl(seq);
+    tcp->ack = stack_htonl(ack);
+    tcp->dataOffsAndFlags = stack_hton((5<<12) + flags);
+
+    /* calculate checksum and send the segment
+     * to the destination target IP address
+     */
+    pseudoHdrSum = pseudo_header_sum(srcIP, tgtIP, TCP_HDR_LEN);
+    checksumTemp = stack_checksumEx(tcp, TCP_HDR_LEN, pseudoHdrSum);
+    tcp->checksum = ~checksumTemp;
+
+    p->len = FRAME_HDR_LEN + IP_HDR_LEN + TCP_HDR_LEN;
+    result = ip4_output(tgtIP, IP4_TCP, p);
+    pbuf_free(p);
+
+    return result;
+}
 
 /*------------------------------------------------
  * tcp_get_opt()
@@ -1582,7 +1648,7 @@ static void get_tcp_opt(uint8_t bytes, uint8_t *optList, struct tcp_opt_t *optio
  * return: 32bit accumulated sum of pseudo-header bytes
  *
  */
-static uint32_t pseudo_header_sum(pcbid_t pcbId, uint16_t tcpLen)
+static uint32_t pseudo_header_sum(ip4_addr_t source, ip4_addr_t dest, uint16_t tcpLen)
 {
     struct pseudo_header_t  header;
     const uint8_t          *octetptr;
@@ -1590,8 +1656,8 @@ static uint32_t pseudo_header_sum(pcbid_t pcbId, uint16_t tcpLen)
     uint16_t                src;
     int                     i;
 
-    header.srcIp = tcpPCB[pcbId].localIP;
-    header.destIp = tcpPCB[pcbId].remoteIP;
+    header.srcIp = source;
+    header.destIp = dest;
     header.zero = 0;
     header.protocol = IP4_TCP;
     header.tcpLen = stack_hton(tcpLen);
@@ -1651,7 +1717,6 @@ static void tcp_timeout_handler(uint32_t now)
             timeOut = tcpPCB[i].RT0 << tcpPCB[i].retranCnt;                 // calculate retransmit timeout value
             if ( tcpPCB[i].retranCnt > TCP_MAX_RETRAN )                     // check if the retransmit count was exceeded
             {
-                send_rst(i);                                                // if yes, so reset connection
                 send_sig(i,TCP_EVENT_ABORTED);                              // signal the application that the connection is being aborted
                 free_tcp_pcb(i);                                            // close the connection
             }                                                               // otherwise

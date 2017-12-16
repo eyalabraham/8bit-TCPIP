@@ -59,7 +59,7 @@
  *
  */
 #define     SLIP_NAME           "sl0\0"     // SLIP interface's identifier
-#define     SLIP_BAUD           9600        // valid rates: '9600' and '19200'
+#define     SLIP_BAUD           19200       // valid rates: '9600' and '19200'
 
 /*
  * Data Link layer setup options, buffers, ARP etc

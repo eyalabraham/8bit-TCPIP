@@ -55,12 +55,12 @@ A rough ASCII sketch of the architecture and associated files:
  |                          |                               |           link_output()
  |                          +-----------/\--------------\/--+ <----- interface_input()
  |                          |                               |
- |                          | Link driver                   |           link_output()
+ |                          | Link driver                   |
  |                          | ~~~~~~~~~~~~                  |
  |                          | enc28j60.c        slip.c      |
  |                          | enc28j60.h        slip.h      |
  |                          | enc28j60-hw.h                 |
- |                          |                               |
+ |                          |                               |           link_output()
  +--------------------------+-------------------------------+ <----- link_input()
 
  Sections
