@@ -18,6 +18,7 @@
     Errata ID: 1572, 3300, 3305, 4785, 2298,
     RFC 1122 sections:
         4.2.2.3  Window Size: RFC-793 Section 3.1
+        4.2.2.20 (c) (f) (g)
 
 *************************************************************************** */
 
@@ -718,14 +719,14 @@ static void tcp_input_handler(struct pbuf_t* const p)
                 if ( flags & TCP_FLAG_ACK )
                 {
                     send_rst_segment(addrLocal, portLocal, addrRemote, portRemote,
-                                     stack_ntoh(tcp->ack), 0L,
+                                     stack_ntohl(tcp->ack), 0L,
                                      TCP_DEF_WINDOW,
                                      TCP_FLAG_RST);
                 }
                 else
                 {
                     send_rst_segment(addrLocal, portLocal, addrRemote, portRemote,
-                                     0L, stack_ntoh(tcp->seq) + segLen,
+                                     0L, stack_ntohl(tcp->seq) + segLen,
                                      TCP_DEF_WINDOW,
                                      TCP_FLAG_RST + TCP_FLAG_ACK);
                 }
@@ -761,7 +762,7 @@ static void tcp_input_handler(struct pbuf_t* const p)
              *      <SEQ=SEG.ACK><CTL=RST>
              */
             send_rst_segment(addrLocal, portLocal, addrRemote, portRemote,
-                             stack_ntoh(tcp->ack), 0L,
+                             stack_ntohl(tcp->ack), 0L,
                              TCP_DEF_WINDOW,
                              TCP_FLAG_RST);
             return;
@@ -826,7 +827,7 @@ static void tcp_input_handler(struct pbuf_t* const p)
                 else
                 {
                     send_rst_segment(addrLocal, portLocal, addrRemote, portRemote,          // send reset <SEQ=SEG.ACK><CTL=RST>
-                                     stack_ntoh(tcp->ack), 0L,
+                                     stack_ntohl(tcp->ack), 0L,
                                      TCP_DEF_WINDOW,
                                      TCP_FLAG_RST);
                     return;
@@ -902,6 +903,12 @@ static void tcp_input_handler(struct pbuf_t* const p)
                 tcpPCB[pcbId].SND_UNA = tcpPCB[pcbId].SEG_ACK;
             if ( tcpPCB[pcbId].SND_UNA > tcpPCB[pcbId].ISS )
             {
+                /* RFC 1122, 4.2.2.20(c)
+                 */
+                tcpPCB[pcbId].SND_WND = tcpPCB[pcbId].SEG_WND;
+                tcpPCB[pcbId].SND_WL1 = tcpPCB[pcbId].SEG_SEQ;
+                tcpPCB[pcbId].SND_WL2 = tcpPCB[pcbId].SEG_ACK;
+
                 send_ack(pcbId);
                 set_state(pcbId,ESTABLISHED);
             }
@@ -977,7 +984,7 @@ static void tcp_input_handler(struct pbuf_t* const p)
         if ( flags & TCP_FLAG_SYN )
         {
             send_rst_segment(addrLocal, portLocal, addrRemote, portRemote,
-                             stack_ntoh(tcp->ack), 0L,
+                             stack_ntohl(tcp->ack), 0L,
                              TCP_DEF_WINDOW,
                              TCP_FLAG_RST);
             send_sig(pcbId,TCP_EVENT_REMOTE_RST);
@@ -1000,6 +1007,12 @@ static void tcp_input_handler(struct pbuf_t* const p)
                 if ( tcpPCB[pcbId].SEG_ACK > tcpPCB[pcbId].SND_UNA &&                       // check segment validity (Errata ID: 3301)
                      tcpPCB[pcbId].SEG_ACK <= tcpPCB[pcbId].SND_NXT )
                 {
+                    /* RFC 1122, 4.2.2.20(f)
+                     */
+                    tcpPCB[pcbId].SND_WND = tcpPCB[pcbId].SEG_WND;
+                    tcpPCB[pcbId].SND_WL1 = tcpPCB[pcbId].SEG_SEQ;
+                    tcpPCB[pcbId].SND_WL2 = tcpPCB[pcbId].SEG_ACK;
+
                     if ( tcpPCB[pcbId].tcp_accept_fn != NULL )                              // guard, but should never be NULL
                         tcpPCB[pcbId].tcp_accept_fn(pcbId);                                 // call the listner's accept callback
                     set_state(pcbId,ESTABLISHED);                                           // enter ESTABLISHED state and continue processing
@@ -1007,7 +1020,7 @@ static void tcp_input_handler(struct pbuf_t* const p)
                 else
                 {
                     send_rst_segment(addrLocal, portLocal, addrRemote, portRemote,          // send reset <SEQ=SEG.ACK><CTL=RST>
-                                     stack_ntoh(tcp->ack), 0L,
+                                     stack_ntohl(tcp->ack), 0L,
                                      TCP_DEF_WINDOW,
                                      TCP_FLAG_RST);
                     return;
@@ -1039,6 +1052,16 @@ static void tcp_input_handler(struct pbuf_t* const p)
                  * the last segment used to update SND.WND.  The check here
                  * prevents using old segments to update the window.
                  */
+#if DEBUG_ON
+                printf(" id %d\n SND_UNA %lu\n SEG_ACK %lu\n SND_NXT %lu\n sendTime %lu\n echoTime %lu\n",
+                        pcbId,
+                        tcpPCB[pcbId].SND_UNA,
+                        tcpPCB[pcbId].SEG_ACK,
+                        tcpPCB[pcbId].SND_NXT,
+                        tcpPCB[pcbId].sendTime,
+                        tcpPCB[pcbId].RCV_opt.echoTime);
+#endif
+
                 if ( tcpPCB[pcbId].SND_UNA < tcpPCB[pcbId].SEG_ACK &&                       // check segment validity
                      tcpPCB[pcbId].SEG_ACK <= tcpPCB[pcbId].SND_NXT )
                 {
@@ -1064,7 +1087,14 @@ static void tcp_input_handler(struct pbuf_t* const p)
                         /* TODO calculate RTT here
                          */
                     }
+                }
 
+                /* RFC 1122, 4.2.2.20(g)
+                 * window update conditions
+                 */
+                if ( tcpPCB[pcbId].SND_UNA <= tcpPCB[pcbId].SEG_ACK &&
+                     tcpPCB[pcbId].SEG_ACK <= tcpPCB[pcbId].SND_NXT )
+                {
                     if ( tcpPCB[pcbId].SND_WL1 < tcpPCB[pcbId].SEG_SEQ ||
                          (tcpPCB[pcbId].SND_WL1 == tcpPCB[pcbId].SEG_SEQ &&
                           tcpPCB[pcbId].SND_WL2 <= tcpPCB[pcbId].SEG_ACK))
@@ -1076,15 +1106,16 @@ static void tcp_input_handler(struct pbuf_t* const p)
                 }
 
                 /* If the ACK is a duplicate (SEG.ACK < SND.UNA), it can be ignored.
+                 * TODO [RFC 1122, 4.2.2.20(g)] states (SEG.ACK =< SND.UNA), but I found this to not work!
                  * If the ACK acks something not yet sent (SEG.ACK > SND.NXT)
-                 * TODO then send an ACK, drop the segment, and return.
+                 * then send an ACK, drop the segment, and return.
                  */
                 if ( tcpPCB[pcbId].SEG_ACK < tcpPCB[pcbId].SND_UNA )
                     return;
 
                 if ( tcpPCB[pcbId].SEG_ACK > tcpPCB[pcbId].SND_NXT )
                 {
-                    //send_ack(pcbId);
+                    send_ack(pcbId);
                     return;
                 }
 
@@ -1472,11 +1503,8 @@ static ip4_err_t send_segment(pcbid_t pcbId, uint16_t flags)
      * such a segment will be transmitted and the pbuf is freed.
      */
     result = ip4_output(tcpPCB[pcbId].remoteIP, IP4_TCP, p);                            // transmit the TCP segment
-    if ( result == ERR_OK ||                                                            // if transmit was successful
-         result == ERR_ARP_QUEUE )
-    {
-        tcpPCB[pcbId].SND_NXT += sendCount;                                             // adjust the send next count
-    }
+
+    tcpPCB[pcbId].SND_NXT += sendCount;                                                 // adjust the send next count
 
     if ( (flags & (TCP_FLAG_FIN + TCP_FLAG_SYN)) ||                                     // only queue segments that need to be acknowledged
           sendCount > 0 )                                                               // ones that have control flags other than ACK or contain data
