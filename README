@@ -26,8 +26,8 @@ A rough ASCII sketch of the architecture and associated files:
  +--------------------------+-------------------------------+
  | Common stack components  | Application                   |
  | ~~~~~~~~~~~~~~~~~~~~~~~~ | ~~~~~~~~~~~~                  |
- | stack.c                  |                               |
- | stack.h                  |                               |
+ | stack.c                  | httpd.c                       |
+ | stack.h                  | ethtest.c                     |
  | options.h                |                               |
  | error.h                  |                               |           [ xxx_sendxx() function per transport]
  | types.h                  +-----------/\--------------\/--+ <----- [receive callback function per transport]

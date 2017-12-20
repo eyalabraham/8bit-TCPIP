@@ -645,6 +645,7 @@ struct pbuf_t* const link_input(struct net_interface_t* const netif)
     struct pbuf_t      *p;
     uint16_t            len;
     struct enc28j60_t  *ethif;
+    uint8_t             rdPtrL, rdPtrH;
 
 #ifdef DRV_DEBUG_FUNC_NAME
     printf("enter: %s()\n",__func__);
@@ -711,9 +712,32 @@ struct pbuf_t* const link_input(struct net_interface_t* const netif)
     }
 #endif
 
-    // acknowledge that a packet has been read from ENC28J60             TODO need to implement errata #14
-    writeControlRegister(ERXRDPTL, ethif->rxStatVector.nextPacketL);  // update ERXRDPT to free read-packet buffer space
-    writeControlRegister(ERXRDPTH, ethif->rxStatVector.nextPacketH);
+    /* acknowledge that a packet has been read from ENC28J60
+     * by updating ERXRDPT. Also implementing errata #14 as:
+     *
+     * if (Next Packet Pointer = ERXST)
+     * then:
+     *      ERXRDPT = ERXND
+     *      ERXND should always be on odd address
+     * else:
+     *      ERXRDPT = 'Next Packet Pointer' – 1
+     *      'Next Packet Pointer' is always on even address
+     */
+    if ( ethif->rxStatVector.nextPacketL == LOW_BYTE(INIT_ERXST) &&
+         ethif->rxStatVector.nextPacketH == HIGH_BYTE(INIT_ERXST) )
+    {
+        rdPtrL = LOW_BYTE(INIT_ERXND);
+        rdPtrH = HIGH_BYTE(INIT_ERXND);
+    }
+    else
+    {
+        rdPtrL = ethif->rxStatVector.nextPacketL - 1;
+        rdPtrH = ethif->rxStatVector.nextPacketH;
+        if ( rdPtrL == 0xff )
+            rdPtrH--;
+    }
+    writeControlRegister(ERXRDPTL, rdPtrL);
+    writeControlRegister(ERXRDPTH, rdPtrH);
     setControlBit(ECON2, ECON2_PKTDEC);                               // decrement packet waiting count
 
     return p;

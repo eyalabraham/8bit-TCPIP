@@ -112,7 +112,7 @@ struct enc28j60_t
 ----------------------------------------- */
 #define     INIT_ERXST          0x0000          // receive buffer start 0x0000 (errata #5, DS80349C)
 #define     INIT_ERXND          0x16ff          // receive buffer end (size 5.75K byte)
-#define     INIT_ERXRDPT        INIT_ERXST      // receiver read pointer 0x0000
+#define     INIT_ERXRDPT        INIT_ERXND      // receiver read pointer per errata #14
 #define     INIT_ERXWRPT        INIT_ERXST      // receiver write pointer 0x0000
 #define     INIT_ERDPT          INIT_ERXST      // receiver read pointer
 
