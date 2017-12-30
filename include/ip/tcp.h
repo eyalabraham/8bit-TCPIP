@@ -17,6 +17,18 @@
 #include    "ip/types.h"
 
 /* -----------------------------------------
+   TCP utility types
+----------------------------------------- */
+struct tcp_conn_state_t
+{
+    ip4_addr_t  localIP;                                // local IP address to bind this PCB
+    uint16_t    localPort;                              // local port to bind this PCB
+    ip4_addr_t  remoteIP;                               // remote IP source
+    uint16_t    remotePort;                             // remote port of source IP
+    pcb_state_t state;                                  // PCB state
+};
+
+/* -----------------------------------------
    TCP protocol functions
 ----------------------------------------- */
 /* initialize open and close TCP connections
@@ -56,5 +68,7 @@ int               tcp_recv(pcbid_t,                     // received data, return
  */
 ip4_addr_t        tcp_remote_addr(pcbid_t);             // get remote address of a connection
 uint16_t          tcp_remote_port(pcbid_t);             // get remote port of a connection
+int               tcp_util_conn_state(pcbid_t,          // get TCP connection info/state
+                                      struct tcp_conn_state_t*);
 
 #endif /* __TCP_H__ */

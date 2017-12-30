@@ -645,6 +645,30 @@ uint16_t tcp_remote_port(pcbid_t pcbId)
 }
 
 /*------------------------------------------------
+ * tcp_util_conn_state()
+ *
+ *  return the tcp parameters and state for a given PCB
+ *  connection ID
+ *
+ * param:  valid PCB ID, pointer to connection state structure
+ * return: '0' no data/ID is invalid, '-1' connection state info is valid
+ *
+ */
+int tcp_util_conn_state(pcbid_t pcbId, struct tcp_conn_state_t *state)
+{
+    if ( pcbId >= TCP_PCB_COUNT )
+        return 0;
+
+    state->localIP = tcpPCB[pcbId].localIP;
+    state->remoteIP = tcpPCB[pcbId].remoteIP;
+    state->localPort = tcpPCB[pcbId].localPort;
+    state->remotePort = tcpPCB[pcbId].remotePort;
+    state->state = tcpPCB[pcbId].state;
+
+    return -1;
+}
+
+/*------------------------------------------------
  * tcp_input_handler()
  *
  *  this function links to the stack and provides a general
@@ -987,7 +1011,7 @@ static void tcp_input_handler(struct pbuf_t* const p)
                              stack_ntohl(tcp->ack), 0L,
                              TCP_DEF_WINDOW,
                              TCP_FLAG_RST);
-            send_sig(pcbId,TCP_EVENT_REMOTE_RST);
+            send_sig(pcbId,TCP_EVENT_ABORTED);
             free_tcp_pcb(pcbId);
             return;
         }
@@ -1561,11 +1585,19 @@ static ip4_err_t send_rst_segment(ip4_addr_t srcIP, uint16_t srcPort,
     tcp = (struct tcp_t*) &(p->pbuf[FRAME_HDR_LEN + IP_HDR_LEN]);
     tcp->srcPort = stack_hton(srcPort);
     tcp->destPort = stack_hton(tgtPort);
-    tcp->window = stack_hton(window);
+    tcp->window = 0;
     tcp->checksum = 0;
     tcp->urgentPtr = 0;
     tcp->seq = stack_htonl(seq);
-    tcp->ack = stack_htonl(ack);
+    if ( flags & TCP_FLAG_ACK )
+    {
+        tcp->ack = stack_htonl(ack);
+    }
+    else
+    {
+        tcp->ack = 0UL;
+    }
+
     tcp->dataOffsAndFlags = stack_hton((5<<12) + flags);
 
     /* calculate checksum and send the segment
