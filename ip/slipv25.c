@@ -1,6 +1,6 @@
 /* ***************************************************************************
 
-  slip.c
+  slipv25.c
 
    This is a SLIP Interface driver.
    It follows the LwIP SLIP driver structure, and implements
@@ -171,6 +171,31 @@ struct slip_t* slip_init(void)
     linkState = 1;
 
     return &slipVar;
+}
+
+/* -----------------------------------------
+ * slip_close()
+ *
+ * This function closes the slip connection.
+ * Disable inettrupts on INT3 from Z80-SIO2
+ *
+ * param:  none
+ * return: none
+ * ----------------------------------------- */
+void slip_close(void)
+{
+    uint8_t     temp;
+
+    /* disable interrupts
+     */
+    _disable();
+
+    /* TODO disable RX and Tx
+     */
+
+    /* enable interrupts now
+     */
+    _enable();
 }
 
 /* -----------------------------------------

@@ -7,11 +7,13 @@
   May 2017 - Created
 
 *************************************************************************** */
+#define     __STDC_WANT_LIB_EXT1__  1               // safe library function calls
 
 #include    <malloc.h>
 #include    <assert.h>
 #include    <string.h>
 #include    <stdio.h>
+#include    <stdlib.h>
 
 #include    "ip/stack.h"
 #include    "ip/arp.h"
@@ -69,7 +71,9 @@ void stack_init(void)
         timers[i].timer_callback = NULL;
     }
 
+#if ( !SLIP_ONLY )
     arp_init();
+#endif
 }
 
 /*------------------------------------------------
@@ -424,7 +428,6 @@ uint16_t stack_checksumEx(const void *dataptr, int len, uint32_t accSum)
  *
  *  this function converts an IP address from a 32bit representation
  *  to a string 'dot' notation representation
- *  source: https://github.com/espressif/esp-idf/blob/master/components/lwip/core/ipv4/ip4_addr.c
  *
  *  param:  IP address in 32bit representation, pointer to output string, string length
  *          length of the string should have space for at least 16 characters 'xxx.xxx.xxx.xxx\0'
@@ -481,6 +484,67 @@ char* stack_ip4addr_ntoa(ip4_addr_t s_addr, char* const buf, uint8_t buflen)
         buf[0] = 0;
 
     return buf;
+}
+
+/*------------------------------------------------
+ * stack_ip4addr_aton()
+ *
+ *  this function converts an IP address from a string 'dot' notation to
+ *  a 32bit representation
+ *
+ *  param:  IP address in string format 'xxx.xxx.xxx.xxx\0',
+ *          pointer to 32bit IPv4 address representation.
+ *  return: non-zero if conversion is ok, zero if error
+ *
+ */
+int stack_ip4addr_aton(const char* buf, ip4_addr_t *ip4_addr)
+{
+    int     conv;
+    int     a, b, c, d;
+
+    conv = sscanf_s(buf,"%d.%d.%d.%d", &a, &b, &c, &d);
+
+    if ( conv != 4 ||
+         a < 0 || a > 255 ||
+         b < 0 || b > 255 ||
+         c < 0 || c > 255 ||
+         d < 0 || d > 255 )
+    {
+        *ip4_addr = 0;
+        return 0;
+    }
+    else
+    {
+        *ip4_addr = IP4_ADDR((uint8_t)a,(uint8_t)b,(uint8_t)c,(uint8_t)d);
+    }
+
+    return -1;
+}
+
+/*------------------------------------------------
+ * stack_ip4addr_getenv()
+ *
+ *  this function searches the local environement for an environement
+ *  variable that holds an IPv4 address
+ *
+ *  param:  environment variable name of an IP address string of
+ *          format 'xxx.xxx.xxx.xxx\0',
+ *          pointer to 32bit IPv4 address representation.
+ *  return: non-zero if conversion is ok, zero if error
+ *
+ */
+int stack_ip4addr_getenv(const char* env_var_name, ip4_addr_t *ip4_addr)
+{
+    char        env_var[32];
+    size_t      env_var_len;
+
+    if( ( getenv_s(&env_var_len, env_var, sizeof(env_var), env_var_name) == 0 ) &&
+          stack_ip4addr_aton(env_var, ip4_addr) )
+    {
+        return -1;
+    }
+
+    return 0;
 }
 
 /*------------------------------------------------

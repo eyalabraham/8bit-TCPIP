@@ -11,6 +11,8 @@
 #ifndef __SLIP_H__
 #define __SLIP_H__
 
+#include    <stdint.h>
+
 #include    "ip/error.h"
 #include    "ip/types.h"
 
@@ -27,6 +29,7 @@ struct slip_t
    interface functions
 ----------------------------------------- */
 struct slip_t*       slip_init(void);
+void                 slip_close(void);
 ip4_err_t            slip_output(struct net_interface_t* const, struct pbuf_t* const);
 struct pbuf_t* const slip_input(struct net_interface_t* const);
 int                  slip_link_state(void);

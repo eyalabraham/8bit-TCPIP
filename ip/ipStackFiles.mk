@@ -8,7 +8,15 @@ STACKCORE=$(IPDIR)/stack.c
 # Microchip ENC28J60 driver and data link layer
 INTERFACE=$(IPDIR)/enc28j60.c \
 	$(IPDIR)/arp.c \
-	$(IPDIR)/slip.c \
+	$(IPDIR)/slipv25.c \
+	$(IPDIR)/netif.c
+
+# SLIP driver and data link layer for V25
+INTERFACESLIPV25=$(IPDIR)/slipv25.c \
+	$(IPDIR)/netif.c
+
+# SLIP driver and data link layer for PC-XT
+INTERFACESLIPSIO=$(IPDIR)/slipsio.c \
 	$(IPDIR)/netif.c
 
 # Network layer
@@ -19,14 +27,3 @@ TRANSPORT= $(IPDIR)/icmp.c \
 	$(IPDIR)/udp.c \
 	$(IPDIR)/tcp.c
 
-# application layer
-APPLICATION=$(IPDIR)/ntp.c \
-	$(IPDIR)/http.c \
-	$(IPDIR)/dhcp.c \
-	$(IPDIR)/ping.c
-
-IPSTACK=$(STACKCORE) \
-	$(INTERFACE) \
-	$(NETWORK) \
-	$(TRANSPORT) \
-	$(APPLICATION)

@@ -41,6 +41,7 @@ ip4_err_t interface_init(struct net_interface_t* const netif)
 {
     ip4_err_t     result = ERR_NETIF;                   // signal an interface error
 
+#if ( !SLIP_ONLY )
     memset(netif, 0, sizeof(struct net_interface_t));   // clear structure
 
     netif->hwaddr[0] = MAC0;                            // initialize mac address
@@ -77,6 +78,8 @@ ip4_err_t interface_init(struct net_interface_t* const netif)
         netif->flags |= (NETIF_FLAG_LINK_UP | NETIF_FLAG_UP);   // if ENC28J60 initializes properly then set state to link up
         result = ERR_OK;
     }
+#endif
+
     return result;
 }
 

@@ -23,7 +23,7 @@
  *
  */
 #define     HOSTNAME_LENGTH     10
-#define     HOSTNAME            "nec-v25\0"
+#define     HOSTNAME            "pcxt\0"
 
 #define     RX_BUFS             1           // # of input packet buffers, relying on device driver buffering
 #define     TX_BUFS             7           // # of output packet buffers
@@ -49,8 +49,8 @@
 #define     MAC5                0x00
 
 #define     FULL_DUPLEX         0           // set to 0 for half-duplex setup
-#define     INTERFACE_COUNT     2           // # of ethernet interfaces in the system
-#define     DRV_DMA_IO          1           // set to 1 for DMA based IO
+#define     INTERFACE_COUNT     1           // # of ethernet interfaces in the system
+#define     DRV_DMA_IO          0           // set to 1 for DMA based IO
 
 #define     MTU                 1500
 
@@ -58,8 +58,10 @@
  * SLIP setup options
  *
  */
+#define     SLIP_ONLY           1           // set to '1' if only SLIP is used with no other interface
 #define     SLIP_NAME           "sl0\0"     // SLIP interface's identifier
-#define     SLIP_BAUD           19200       // valid rates: '9600' and '19200'
+#define     SLIP_BAUD           9600        // valid rates on NEC V25: '9600' and '19200'
+                                            // valid rates on PC-XT: '4800','9600','19200','38400','57600'
 
 /*
  * Data Link layer setup options, buffers, ARP etc

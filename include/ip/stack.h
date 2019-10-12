@@ -42,6 +42,8 @@ uint16_t                        stack_ntoh(uint16_t);                           
 uint32_t                        stack_ntohl(uint32_t);                                  // big-endian to little-endian 32bit bytes swap
 uint16_t                        stack_checksumEx(const void*, int, uint32_t);           // checksum calculation
 char*                           stack_ip4addr_ntoa(ip4_addr_t, char* const, uint8_t);   // convert network address to string representation
+int                             stack_ip4addr_aton(const char*, ip4_addr_t*);           // convert string representation to network address
+int                             stack_ip4addr_getenv(const char*, ip4_addr_t*);         // get IPv4 address from environment
 
 void                            inputStub(struct pbuf_t* const,                         // input stub function
                                           struct net_interface_t* const);

@@ -1,4 +1,4 @@
-
+# 8-bit IP stack
 I wrote this IP stack after trying out the LwIP stack for my project. LwIP is hosted on SAVANNAH:
 https://savannah.nongnu.org/projects/lwip/ or http://www.nongnu.org/lwip/2_0_x/index.html.
 LwIP was not light weight enough for my needs, and the documentation, IMHO,
@@ -22,7 +22,7 @@ in a single threaded environment with no OS. This stack will be able to run in m
 In both cases the stack will be running as an isolated single thread.
 
 A rough ASCII sketch of the architecture and associated files:
-
+```
  +--------------------------+-------------------------------+
  | Common stack components  | Application                   |
  | ~~~~~~~~~~~~~~~~~~~~~~~~ | ~~~~~~~~~~~~                  |
@@ -62,9 +62,8 @@ A rough ASCII sketch of the architecture and associated files:
  |                          | enc28j60-hw.h                 |
  |                          |                               |           link_output()
  +--------------------------+-------------------------------+ <----- link_input()
-
- Sections
------------------------------------------
+```
+## Sections
  1. ENC28J60 driver
  2. Network interface (netif)
  3. ARP
@@ -75,9 +74,7 @@ A rough ASCII sketch of the architecture and associated files:
  8. SLIP setup on Ubuntu Linux 16.04 LTS
  9. File list
 
-
- 1. ENC28J60 driver
------------------------------------------
+### 1. ENC28J60 driver
 The driver structure borrows a lot from the LwIP driver skeleton provided with the LwIP source code.
 This is simply because I had the driver written for LwIP and chose to reuse the code more or less as is.
 The driver module contains two stack interface functions: link_output() and link_input().
@@ -93,8 +90,7 @@ The link_state() function will test the link condition and return 'up' (1) or 'd
 also be called repeatedly from within the same loop as interface_input(), and the code should take action if link
 state has changed from the last poll.
 
- 2. Network interface (netif)
------------------------------------------
+### 2. Network interface (netif)
 The network interface module is a common code module for any driver.
 There is a one-to-one relationship between driver and network interface because the driver
 functions for input and output will be accessed through a common net_interface_t structure.
@@ -106,8 +102,7 @@ packets are waiting to be read from the interface HW, or read a waiting packet a
 The function interface_input() should be called repeatedly in the main program inside an infinite loop so that
 it can periodically poll the interface. There is no support for an interrupt driven setup.
 
- 3. ARP
------------------------------------------
+### 3. ARP
 The ARP module provides two basic functions: address resolution using ARP requests logged in an internal ARP table,
 and it filters ARP replies and IPv4 inputs for processing.
 The ARP module includes a 'Gratuitous ARP' function that can be called at the users discretion.
@@ -122,8 +117,7 @@ ARP information needs to be inserted, then the oldest entry will be overwritten.
 The ARP module includes a cache clean-out procedure, that is triggered once every 1min. This process will remove stale
 ARP entries older that 5min
 
- 4. IPv4 Network layer
------------------------------------------
+### 4. IPv4 Network layer
 The ipv4 module is a rather simple implementation with two main functions: on packet input the module invokes the
 appropriate handler for ICMP, UDP or TCP. On packet output the module consults a routing table and selects the appropriate
 interface for sending it, then invokes the arp_output(). Note that when using SLIP ARP resolution is skipped and the packet
@@ -132,8 +126,7 @@ The module also includes an ICMP input handler. This handler is located here ins
 because the stack should always be able to respond to ping requests. The ICMP module implements optional outgoing PING
 functionality describe in #5.
 
- 5. Transport layer ICMP UDP and TCP
------------------------------------------
+### 5. Transport layer ICMP UDP and TCP
   ICMP Ping
     The ICMP module implements an ICMP outgoing Ping request. The usage is demonstrated in the ethtest.c program.
     This functionality is implemented as a separate module to allow the user a choice of implementation.
@@ -166,8 +159,7 @@ functionality describe in #5.
     The TCP implementation does not calculate RTT. Instead, a fixed RTT of 1sec is used, and retransmission wait time is doubled
     every time a timer expires. The TCP attempts 10 retransmissions before aborting the connection with a RST.
 
- 6. Common stack components
------------------------------------------
+### 6. Common stack components
 The IPv4 stack functions are typically separated according to the layer they act in. The ASCII diagram has the
 module names listed in the appropriate stack locations.
 The stack has several utility functions that are common to most layers such as timers, buffer allocation, etc.,
@@ -193,9 +185,8 @@ System time and timer functions
     will call a predefined callback if the timeout expires. All timers are periodic, that is, once triggered the
     timer will be reset to be re-triggered after another expiration of the timeout value.
 
- 7. Frame, packet, datagram and segment
------------------------------------------
-
+### 7. Frame, packet, datagram and segment
+```
     [---------------------------------- 1518 ----------------------------------------]  (L1) ENC28J60 device
     
        Header                            Data                                   CRC
@@ -209,37 +200,35 @@ System time and timer functions
 
                                 Header                    Data
                             [-- 20..60 --|------------ 1380..1460 -----------]          (L4) TCP Segment
+```
 
- 8. SLIP setup on Ubuntu Linux 16.04 LTS
------------------------------------------
-    Check that the SLIP kernel module is loaded: 
-    $ lsmod | grep slip
-    
-    If not loaded add 'slip' to /etc/modules or manually load with:
-    $ modprobe slip
-    
+### 8. SLIP setup on Ubuntu Linux
+Check that the SLIP kernel module is loaded: 
+``` $ lsmod | grep slip```
+
+If not loaded add 'slip' to /etc/modules or manually load with:
+```$ modprobe slip```
     Create a SLIP connection between serial port and sl0 with 'slattach':
-    $ sudo slattach -d -L -p slip -s 19200 /dev/ttyS5
-    $ sudo ifconfig sl0 mtu 1500 up
+```
+$ sudo slattach -d -L -p slip -s 19200 /dev/ttyS5
+$ sudo ifconfig sl0 mtu 1500 up
+```
+Sometimes needs:
+```$ tput reset > /dev/ttyS5```
 
-    Sometimes needs:
-    $ tput reset > /dev/ttyS5
-    
-    Check sl0 with: 
-    $ ifconfig sl0
-    
-    Enable packet forwarding:
-    $ sudo sysctl -w net.ipv4.ip_forward=1
-    
-    Setup routing from eth0 to sl0 for 192.168.1.19 (this is the device's IP):
-    $ sudo ip route add to 192.168.1.19 dev sl0 scope host proto static
-    
-    Setup proxy ARP for 192.168.1.19 on eth0:
-    $ sudo arp -v -i eth0 -H ether -Ds 192.168.1.19 eth0 pub
+Check sl0 with: 
+```$ ifconfig sl0```
+
+Enable packet forwarding:
+```$ sudo sysctl -w net.ipv4.ip_forward=1```
+
+Setup routing from eth0 to sl0 for 192.168.1.19 (this is the device's IP):
+```$ sudo ip route add to 192.168.1.19 dev sl0 scope host proto static```
+
+Setup proxy ARP for 192.168.1.19 on eth0:
+```$ sudo arp -v -i eth0 -H ether -Ds 192.168.1.19 eth0 pub```
  
- 9. File list
------------------------------------------
-
+### 9. File list
 README
 
     This file
@@ -310,8 +299,7 @@ types.h
 
     defines stack wide data types and data structures
 
-To-Dos
------------------------------------------
+## To-Dos
 1.  Error handling
     - remove all assert() and replace with error handling code
     - before forwarding packet to IP layer, check that the dest. IP matches our IP
@@ -324,3 +312,4 @@ To-Dos
 5.  Fragmentation and assembly of IPv4 packets
 6.  TCP
     - check TCP checksum when segment is received
+
