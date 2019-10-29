@@ -1275,7 +1275,6 @@ static void tcp_input_handler(struct pbuf_t* const p)
                 return;
             }
 
-            send_sig(pcbId,TCP_EVENT_CLOSE);
             tcpPCB[pcbId].RCV_NXT++;
             send_ack(pcbId);
 
@@ -1284,6 +1283,7 @@ static void tcp_input_handler(struct pbuf_t* const p)
                 case SYN_RECEIVED:
                 case ESTABLISHED:
                     set_state(pcbId,CLOSE_WAIT);
+                    send_sig(pcbId,TCP_EVENT_CLOSE);
                     break;
 
                 case FIN_WAIT1:

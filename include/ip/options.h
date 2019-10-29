@@ -99,7 +99,7 @@
 
 #define     TCP_SERVER_COUNT    1           // number of listening servers
 #define     TCP_CONN_PER_SRVR   10          // max incoming connections per server
-#define     TCP_CLIENT_COUNT    0           // max outgoing client connections
+#define     TCP_CLIENT_COUNT    1           // max outgoing client connections
 #define     TCP_PCB_COUNT       (TCP_CLIENT_COUNT+TCP_SERVER_COUNT*(1+TCP_CONN_PER_SRVR))
 #define     TCP_DATA_BUF_SIZE   1024        // in bytes, max 32,768 bytes in powers of 2: 2, 4, 8, 16, 32, ...
 #define     TCP_DEF_WINDOW      TCP_DATA_BUF_SIZE   // bytes
