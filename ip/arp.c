@@ -35,7 +35,7 @@ struct arp_queue_t  arpQ[ARP_QUEUE_LENGTH];
 int         arpQueuedCount = -1;                            // initialized to '-1' to trigger initialization of the table
 
 /* -----------------------------------------
- * arp_query()
+ * arp_init()
  *
  * initialize ARP functionality
  *
@@ -68,7 +68,7 @@ void arp_init(void)
  *
  * This function searches the ARP table for and IP address
  * that matches ipArrd and return a pointer to the HW address.
- * The function uses the IP address as the key for the serach
+ * The function uses the IP address as the key for the search
  *
  * param:  netif the network interface and IP address to search
  * return: pointer to HW address if found, or NULL if not

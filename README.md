@@ -57,9 +57,9 @@ A rough ASCII sketch of the architecture and associated files:
  |                          |                               |
  |                          | Link driver                   |
  |                          | ~~~~~~~~~~~~                  |
- |                          | enc28j60.c        slip.c      |
- |                          | enc28j60.h        slip.h      |
- |                          | enc28j60-hw.h                 |
+ |                          | enc28j60.c        slipv25.c   |
+ |                          | enc28j60.h        slipsio.c   |
+ |                          | enc28j60-hw.h     slip.h      |
  |                          |                               |           link_output()
  +--------------------------+-------------------------------+ <----- link_input()
 ```
@@ -273,10 +273,11 @@ options.h
     The options header should be included with every IP stack code module and is
     required for building IP stack modules.
 
-slip.c
+slipv25.c
+slipsio.c
 slip.h
 
-    SLIP driver
+    SLIP drivers for NEC V25 UART and Z80-SIO2 USART
     SLIP RFC 1055: <https://tools.ietf.org/html/rfc1055>
     Wiki: <https://en.wikipedia.org/wiki/Serial_Line_Internet_Protocol>
 
@@ -304,7 +305,7 @@ types.h
     - remove all assert() and replace with error handling code
     - before forwarding packet to IP layer, check that the dest. IP matches our IP
       if not there is a possible mis-configured ARP table somewhere
-2.  A way trace packet drops
+2.  A way to trace packet drops
 3.  interface_link_state() should call the link state function through a pointer,
     the current implementation calls the enc26j60 function directly
 4.  Add code to interface_link_state() or other function to set link state in the interface
