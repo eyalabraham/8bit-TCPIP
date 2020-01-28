@@ -172,8 +172,6 @@ struct slip_t* slip_init(void)
     outp(BAUDGEN, temp);
 
     /* setup serial interrupt receive circular buffer
-     * with write pointer and count already accounting for the
-     * four-byte next packet and bytes co_enableunt header
      */
     recvRdPtr = 0;
     recvWrPtr = 0;
@@ -204,7 +202,7 @@ struct slip_t* slip_init(void)
     }
 
     /* enable interrupt input #3
-     * on the interrupt contrller
+     * on the interrupt controller
      */
     temp = inp(IMR) & COM2_INTR_MASK;
     outp(IMR, temp);
@@ -372,12 +370,12 @@ struct pbuf_t* const slip_input(struct net_interface_t* const netif)
     if ( slip_raw_packet_cnt == 0 )
         return NULL;
 
-    assert(recvCnt);    // saninity check on byte count if slip_raw_packet_cnt > 0
+    assert(recvCnt);    // sanity check on byte count if slip_raw_packet_cnt > 0
     
     /* we know we have a packet so allocate a pbuf from the pool
      * and transfer the data from the raw SLIP data buffer to the pbuf.
      * Decode SLIP ESC markers while transferring data until a SLIP_END
-     * is reached, which markes the end of a raw packet.
+     * is reached, which marks the end of a raw packet.
      */
     p = pbuf_allocate();
 
@@ -393,7 +391,7 @@ struct pbuf_t* const slip_input(struct net_interface_t* const netif)
         {
             byte = recvBuffer[recvRdPtr];
 
-            recvCnt--;  // should be safe to do becasue slip_raw_packet_cnt > 0
+            recvCnt--;  // should be safe to do because slip_raw_packet_cnt > 0
             recvRdPtr++;
             if ( recvRdPtr == SER_IN )
                 recvRdPtr = 0;
@@ -497,7 +495,7 @@ int slip_link_state(void)
  *
  * serial interface interrupt handler
  * will be triggered with every received
- * and transmited byte
+ * and transmitted byte
  *
  * ----------------------------------------- */
 static void __interrupt __far ser_isr(void)

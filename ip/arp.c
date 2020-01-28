@@ -341,7 +341,7 @@ static ip4_err_t arp_send(struct net_interface_t* const netif, hwaddr_t *dest, h
     p = pbuf_allocate();                                        // allocation a transmit buffer
     if ( p )
     {
-        frame = (struct ethernet_frame_t*) p->pbuf;             // establish pointer to etherner frame
+        frame = (struct ethernet_frame_t*) p->pbuf;             // establish pointer to ethernet frame
         copy_hwaddr(frame->dest, dest);                         // build request header
         copy_hwaddr(frame->src, src);
         frame->type = stack_ntoh(TYPE_ARP);
