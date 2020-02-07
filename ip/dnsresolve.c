@@ -112,7 +112,6 @@ static uint8_t      dnsPayload[DNS_PAYLOAD_SIZE];
 static uint8_t      dnsName[MAX_HOST_NAME_LEN];
 static char         ip[16];         // For 'nnn.nnn.nnn.nnn\0' IP address
 static char         arpa_name[32];  // For 'nnn.nnn.nnn.nnn.in-addr.arpa\0' name
-static ip4_addr_t   temp_ipv4;
 
 /*------------------------------------------------
  * dnsresolve_gethostbyname()
@@ -192,20 +191,42 @@ dns_result_t dnsresolve_gethostbynameEx(char *host_name,
     dns_result_t            gethostbynameEx_result = DNS_OK;
     int                     done = 0;
 
+    ip4_addr_t              temp_ipv4;
+    ip4_addr_t              gateway = 0;
+    ip4_addr_t              net_mask = 0;
+    ip4_addr_t              local_host = 0;
+
     /* Initialize IP stack
-     * TODO: Get stack parameters from environment
      */
+    if ( !stack_ip4addr_getenv("GATEWAY", &gateway) )
+    {
+        host_info->h_error = ERR_NETIF;
+        return DNS_STACK_ERR;
+    }
+
+    if ( !stack_ip4addr_getenv("NETMASK", &net_mask) )
+    {
+        host_info->h_error = ERR_NETIF;
+        return DNS_STACK_ERR;
+    }
+
+    if ( !stack_ip4addr_getenv("LOCALHOST", &local_host) )
+    {
+        host_info->h_error = ERR_NETIF;
+        return DNS_STACK_ERR;
+    }
+
     stack_init();                                       // initialize IP stack
-    assert(stack_set_route(IP4_ADDR(255,255,255,0),
-                           IP4_ADDR(10,0,0,1),
+    assert(stack_set_route(net_mask,
+                           gateway,
                            0) == ERR_OK);               // setup default route
     netif = stack_get_ethif(0);                         // get pointer to interface 0
     assert(netif);
 
     assert(interface_slip_init(netif) == ERR_OK);       // initialize interface and link HW
-    interface_set_addr(netif, IP4_ADDR(10,0,0,19),      // setup static IP addressing
-                              IP4_ADDR(255,255,255,0),
-                              IP4_ADDR(10,0,0,1));
+    interface_set_addr(netif, local_host,               // setup static IP addressing
+                              net_mask,
+                              gateway);
 
     /* Test link state and send gratuitous ARP
      */
