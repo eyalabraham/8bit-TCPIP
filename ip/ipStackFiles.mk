@@ -23,7 +23,9 @@ INTERFACESLIPSIO=$(IPDIR)/slipsio.c \
 NETWORK=$(IPDIR)/ipv4.c
 
 # transport layer
-TRANSPORT= $(IPDIR)/icmp.c \
+TRANSPORT=$(IPDIR)/icmp.c \
 	$(IPDIR)/udp.c \
 	$(IPDIR)/tcp.c
 
+# services
+SERVICES=$(IPDIR)/dnsresolve.c

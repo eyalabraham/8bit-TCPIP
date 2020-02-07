@@ -430,7 +430,7 @@ uint16_t stack_checksumEx(const void *dataptr, int len, uint32_t accSum)
  *  to a string 'dot' notation representation
  *
  *  param:  IP address in 32bit representation, pointer to output string, string length
- *          length of the string should have space for at least 16 characters 'xxx.xxx.xxx.xxx\0'
+ *          length of the string should have space for at least 16 characters 'nnn.nnn.nnn.nnn\0'
  *          a '\0' will always be inserted at the last string position as a terminator.
  *  return: pointer to output string
  *
@@ -489,10 +489,10 @@ char* stack_ip4addr_ntoa(ip4_addr_t s_addr, char* const buf, uint8_t buflen)
 /*------------------------------------------------
  * stack_ip4addr_aton()
  *
- *  this function converts an IP address from a string 'dot' notation to
+ *  This function converts an IP address from a string 'dot' notation to
  *  a 32bit representation
  *
- *  param:  IP address in string format 'xxx.xxx.xxx.xxx\0',
+ *  param:  IP address in string format 'nnn.nnn.nnn.nnn\0',
  *          pointer to 32bit IPv4 address representation.
  *  return: non-zero if conversion is ok, zero if error
  *
@@ -524,11 +524,11 @@ int stack_ip4addr_aton(const char* buf, ip4_addr_t *ip4_addr)
 /*------------------------------------------------
  * stack_ip4addr_getenv()
  *
- *  this function searches the local environement for an environement
- *  variable that holds an IPv4 address
+ *  this function searches the local environment for an
+ *  environment-variable that holds an IPv4 address
  *
  *  param:  environment variable name of an IP address string of
- *          format 'xxx.xxx.xxx.xxx\0',
+ *          format 'nnn.nnn.nnn.nnn\0',
  *          pointer to 32bit IPv4 address representation.
  *  return: non-zero if conversion is ok, zero if error
  *
