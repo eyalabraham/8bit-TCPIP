@@ -419,6 +419,7 @@ int dnsresolve_get_rr(struct dns_header_t *dns_header, uint8_t *resource_record,
     ip4_addr_t  host_address;
 
     int         rr_length = 0;
+    int         skip_mx_pref = 0;
 
     // Recursively compile the full DNS-formatted name
     memset(rr_object_name, 0, sizeof(rr_object_name));
@@ -450,14 +451,14 @@ int dnsresolve_get_rr(struct dns_header_t *dns_header, uint8_t *resource_record,
             strcpy_s(host_entity->h_aliases, sizeof(host_entity->h_aliases), ip);
             break;
 
+        case T_MX:
+            skip_mx_pref = 2;   // Skip MX preference value
+            /* no break */
         case T_NS:
-            break;
-
         case T_CNAME:
         case T_PTR:
-        case T_MX:
             memset(rr_object_name, 0, sizeof(rr_object_name));
-            dnsresolve_get_dnsname((uint8_t*)dns_header, (resource_record + rr_length),
+            dnsresolve_get_dnsname((uint8_t*)dns_header, (resource_record + rr_length + skip_mx_pref),
                                    rr_object_name, 0, sizeof(rr_object_name));
             dnsresolve_dnsname_to_host(rr_object_name, host_entity->h_aliases, sizeof(host_entity->h_aliases));
             break;
