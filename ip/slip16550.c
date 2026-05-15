@@ -1,13 +1,13 @@
 /* ***************************************************************************
 
-  slipsio.c
+  slip16550.c
 
    This is a SLIP Interface driver.
    It follows the LwIP SLIP driver structure, and implements
-   driver support for my PC-XT Z80 SIO-2 USART board.
+   driver support for my PC-XT 16550 (and 82C50) UART.
    The driver is self contained.
 
-   Eyal Abraham, September 2019
+   Eyal Abraham, April 2026
 
 *************************************************************************** */
 
@@ -34,45 +34,66 @@
 /* -----------------------------------------
    internal driver definitions
 ----------------------------------------- */
-#define     SIODATAA        0x390
-#define     SIOCMDA         0x392
-#define     SIODATAB        0x391
-#define     SIOCMDB         0x393
-#define     BAUDGEN         0x394
+#define     UART_BASE       0x3f8
 
-#define     INT_VEC_MASK    0x0e
-#define     INT_VECA_TXEMPT 0x08
-#define     INT_VECA_EXT    0x0a
-#define     INT_VECA_RXRDY  0x0c
-#define     INT_VECA_RXERR  0x0e
+#define     UART_RBR        UART_BASE
+#define     UART_THR        UART_BASE
+#define     UART_IER        (UART_BASE+1)
+#define     UART_IIR        (UART_BASE+2)
+#define     UART_FCR        (UART_BASE+2)   // 16550 only (write)
+#define     UART_LCR        (UART_BASE+3)
+#define     UART_MCR        (UART_BASE+4)
+#define     UART_LSR        (UART_BASE+5)
+#define     UART_MSR        (UART_BASE+6)
+#define     UART_SCR        (UART_BASE+7)
+#define     UART_DIV_LOW    UART_BASE       // with DLAB bit set
+#define     UART_DIV_HIGH   (UART_BASE+1)   // with DLAB bit set
 
-#define     SIO_INT_RXCHAR  0x01
-#define     SIO_INT_PENDING 0x02
-#define     SIO_INT_TXEMPT  0x04
-#define     SIO_RST_TX_INT  0x28
-#define     SIO_RETI        0x38
-#define     SIO_VEC_STATUS  0x04
+#define     UART_IER_IE     0x01            // Rx interrupt byte available
+
+#define     UART_IIR_PEND   0x01
+#define     UART_IIR_ERR    0x06
+#define     UART_IIR_RXD    0x04
+#define     UART_IIR_TOV    0x0c
+#define     UART_IIR_TXD    0x02
+#define     UART_IIR_CTS    0x00
+
+#define     UART_LCR_INIT   0x03            // Initialization 8N1
+#define     UART_LCR_DLAB   0x80
+
+#define     UART_MCR_RTS    0x02
+
+#define     UART_LSR_RXD    0x01
+#define     UART_LSR_ERR    0x0e            // Framing or Parity or Overrun errors
+#define     UART_LSR_THRE   0x20
+#define     UART_LSR_TEMT   0x40
+
+#define     UART_MSR_CTS    0x10
+
+#define     UART_DIV_4800   64              // BAUD divisor low byte for 4.9152MHz oscillator
+#define     UART_DIV_9600   32
+#define     UART_DIV_19200  16
 
 #ifndef     SLIP_BAUD
 #define     SLIP_BAUD       9600
 #endif
 
-#define     IRR             0x20                // interrupt request register
-#define     ISR             0x20                // interrupt in service register
-#define     IMR             0x21                // interrupt mask register
-#define     COM2_INTR_MASK  0xf7                // b3.. (IRQ3) COM2 serial i/o
+#define     IRR             0x20            // interrupt request register
+#define     ISR             0x20            // interrupt in service register
+#define     IMR             0x21            // interrupt mask register
+#define     COM1_INTR_MASK  0xef            // b4.. (IRQ4) COM1 serial i/o
 
-#define     SER_IRQ         0x0b                // Serial port interrupt, COM2
+#define     SER_IRQ         0x0c            // Serial port interrupt IRQ4, COM1
 
-#define     SER_IN          4096                // circular input buffer
-#define     SER_OUT         2048                // circular output buffer (not the pbuf!)
+#define     SER_IN          4096            // circular input buffer
+#define     SER_OUT         2048            // circular output buffer (not the pbuf!)
 
-#define     SLIP_END        0xC0                // start and end of every packet
-#define     SLIP_ESC        0xDB                // escape start (one byte escaped data follows)
-#define     SLIP_ESC_END    0xDC                // following escape: original byte is 0xC0 (END)
-#define     SLIP_ESC_ESC    0xDD                // following escape: original byte is 0xDB (ESC)
+#define     SLIP_END        0xc0            // start and end of every packet
+#define     SLIP_ESC        0xdb            // escape start (one byte escaped data follows)
+#define     SLIP_ESC_END    0xdc            // following escape: original byte is 0xC0 (END)
+#define     SLIP_ESC_ESC    0xdd            // following escape: original byte is 0xDB (ESC)
 
-#define     PIC_EOI         0x20                // 8259 PIC
+#define     PIC_EOI         0x20            // 8259 PIC
 #define     PIC_OCW2        0x20
 
 /* -----------------------------------------
@@ -83,19 +104,6 @@ static void __interrupt __far ser_isr(void);
 /* -----------------------------------------
    driver globals
 ----------------------------------------- */
-static int sio_config[] =
-    {   0x18,               // channel reset
-        0x14,               // select WR4 and Ext Int reset
-        0x44,               // clkx16, 1 stop bit, no parity
-        0x03,               // select WR3
-        0xc1,               // Rx: 8-bit, ENABLE
-        0x05,               // select WR5
-        0x68,               // Tx, 8-bit, ENABLE, RTS not active
-        0x11,               // select WR1 and Ext Int reset
-        0x10,               // enable Rx interrupts
-        -1
-    };
-
 static uint8_t  recvBuffer[SER_IN];     // serial circular receive buffer
 static int      recvRdPtr;
 static int      recvCnt;
@@ -130,9 +138,7 @@ static int                 linkState = 0;
  * ----------------------------------------- */
 struct slip_t* slip_init(void)
 {
-    uint8_t    *pBaudSelect;        // PCXT BIOS data area pointer
     uint8_t     temp;
-    int         i = 0;
 
 #ifdef DRV_DEBUG_FUNC_NAME
     printf("enter: %s()\n",__func__);
@@ -145,31 +151,6 @@ struct slip_t* slip_init(void)
     /* setup interrupt vector
      */
     _dos_setvect(SER_IRQ, ser_isr);
-
-    /* Baud rate channel A initialization
-        0,0,0   0  4800
-        0,0,1   1  9600
-        0,1,0   2  19200
-        0,1,1   3  38400
-        1,0,0   4  57600
-     */
-    pBaudSelect = MK_FP(0x0040, 0x0012);
-    temp = *pBaudSelect & 0xf8;
-
-#if ( SLIP_BAUD == 4800 )
-    temp |= 0;
-#elif (  SLIP_BAUD == 9600 )
-    temp |= 1;
-#elif (  SLIP_BAUD == 19200 )
-    temp |= 2;
-#elif (  SLIP_BAUD == 38400 )
-    temp |= 3;
-#elif (  SLIP_BAUD == 57600 )
-    temp |= 4;
-#endif
-
-    *pBaudSelect = temp;
-    outp(BAUDGEN, temp);
 
     /* setup serial interrupt receive circular buffer
      */
@@ -188,28 +169,45 @@ struct slip_t* slip_init(void)
     
     linkState = 1;
 
-    /* SIO-2 channel B interface initialization
+    /* UARTBAUD rate
      */
-    outp(SIOCMDB, 1);               // select WR1
-    outp(SIOCMDB, SIO_VEC_STATUS);  // enable status in interrupt vector
+    outp(UART_LCR, UART_LCR_DLAB);
+    outp(UART_DIV_HIGH, 0);
 
-    /* SIO-2 channel A interface initialization
+#if (SLIP_BAUD==4800)
+    outp(UART_DIV_LOW, UART_DIV_4800);
+#elif (SLIP_BAUD==9600)
+    outp(UART_DIV_LOW, UART_DIV_9600);
+#elif (SLIP_BAUD==19200)
+    outp(UART_DIV_LOW, UART_DIV_19200);
+#else
+    #error "Missing a valid BAUD rate definition in SLIP_BAUD"
+#endif
+
+    /* UART bits, parity and stop 8N1
      */
-    while ( sio_config[i] != -1 )
-    {
-        outp(SIOCMDA, (uint8_t)sio_config[i]);
-        i++;
-    }
+    outp(UART_LCR, UART_LCR_INIT);
 
-    /* enable interrupt input #3
+    /* UART interrupt enable
+     */
+    outp(UART_IER, UART_IER_IE);
+
+    /* enable interrupt
      * on the interrupt controller
      */
-    temp = inp(IMR) & COM2_INTR_MASK;
+    temp = inp(IMR) & COM1_INTR_MASK;
     outp(IMR, temp);
 
     /* enable interrupts now
      */
     _enable();
+
+    /* signal serial receive ready
+     */
+#if ( SLIP_HW_FLOW_CTRL == 1 )
+    temp = inp(UART_MCR) | UART_MCR_RTS;
+    outp(UART_MCR, temp);
+#endif
 
     return &slipVar;
 }
@@ -231,19 +229,27 @@ void slip_close(void)
     printf("enter: %s()\n",__func__);
 #endif
 
+    /* signal serial receive off-line
+     */
+#if ( SLIP_HW_FLOW_CTRL == 1 )
+    temp = inp(UART_MCR) & ~UART_MCR_RTS;
+    outp(UART_MCR, temp);
+#endif
+
     /* disable interrupts
      */
     _disable();
 
-    /* disable interrupt input #3
+    /* disable interrupt input
      * on the interrupt controller
      */
-    temp = inp(IMR) | ~COM2_INTR_MASK;
+    temp = inp(IMR) | ~COM1_INTR_MASK;
     outp(IMR, temp);
 
-    /* TODO disable RX and Tx
-     * TODO disable Z80-SIO2 Rx, Tx and external INT interrupts
+    /* disable RX and Tx interrupts
      */
+    temp = inp(UART_IER) & ~UART_IER_IE;
+    outp(UART_IER, temp);
 
     /* enable interrupts now
      */
@@ -270,6 +276,15 @@ ip4_err_t slip_output(struct net_interface_t* const netif, struct pbuf_t* p)
 
 #ifdef DRV_DEBUG_FUNC_NAME
     printf("enter: %s()\n",__func__);
+#endif
+
+    /* is the receiver ready to accept packets
+     */
+#if ( SLIP_HW_FLOW_CTRL == 1 )
+    if ( inp(UART_MSR) & UART_MSR_CTS == 0 )
+    {
+        return ERR_DRV;
+    }
 #endif
 
     /* first copy the bytes from the pbuf buffer
@@ -325,9 +340,9 @@ ip4_err_t slip_output(struct net_interface_t* const netif, struct pbuf_t* p)
 
         while ( txCount )
         {
-            while ( (inp(SIOCMDA) & SIO_INT_TXEMPT) == 0 ) {};  // wait for Tx register to be empty
+            while ( (inp(UART_LSR) & UART_LSR_THRE) == 0 ) {};  // wait for Tx register to be empty
                                                                 // TODO add time out
-            outp(SIODATAA, sendBuffer[txPtr++]);
+            outp(UART_THR, sendBuffer[txPtr++]);
             txCount--;
         }
 
@@ -495,69 +510,59 @@ int slip_link_state(void)
  * ser_isr()
  *
  * serial interface interrupt handler
- * will be triggered with every received
- * and transmitted byte
+ * will be triggered with received byte
  *
  * ----------------------------------------- */
 static void __interrupt __far ser_isr(void)
 {
-    uint8_t     byte, int_vector;
+    uint8_t     byte;
 
 #ifdef DRV_DEBUG_FUNC_NAME
     printf("enter: %s()\n",__func__);
 #endif
 
-    //_enable();  // enable interrupts during serial processing
+    //_enable();  // enable interrupts during serial processing?
 
-    /* with Z80-SIO read RR2 register to get interrupt vector
-     * for the reason of the interrupt.
+    /* signal serial receive off-line
      */
+#if ( SLIP_HW_FLOW_CTRL == 1 )
+    byte = inp(UART_MCR) & ~UART_MCR_RTS;
+    outp(UART_MCR, byte);
+#endif
 
-    outp(SIOCMDB, 2);                           // select RR2
-    int_vector = inp(SIOCMDB) & INT_VEC_MASK;   // read RR2
+    byte = inp(UART_RBR);
 
-    /* read the incoming bytes from the serial interface input register
-     * and store in the input circular buffer if there is enough space.
-     * if the buffer becomes full while reading in bytes store a SLIP END
-     * and drop incoming data.
-     * Data bytes are stored as-is in raw SLIP format. The routine only
-     * tracks SLIP END markers and increments a global packet count that
-     * are present in the buffer.
-     * TODO: hardware flow control for serial link
+    /* Store the incoming byte only if there is room in the buffer.
+     * if not, drop the incoming bytes until the buffer is cleared.
+     * This will have the effect of incomplete packets that will be dropped
+     * at higher levels of the protocol. This interrupt layer needs to be
+     * as fast as possible with minimal inspection.
      */
-    if ( int_vector == INT_VECA_RXRDY )
+    if ( recvCnt < SER_IN )
     {
-        byte = inp(SIODATAA);
+        recvBuffer[recvWrPtr] = byte;
+        recvCnt++;
+        recvWrPtr++;
+        if ( recvWrPtr == SER_IN )
+            recvWrPtr = 0;
 
-        /* Store the incoming byte only if there is room in the buffer.
-         * if not, drop the incoming bytes until the buffer is cleared.
-         * This will have the effect of incomplete packets that will be dropped
-         * at higher levels of the protocol. This interrupt layer needs to be
-         * as fast as possible with minimal inspection.
+        /* track SLIP_END markers to maintain a count of full raw SLIP
+         * packets stored in the input buffer.
          */
-        if ( recvCnt < SER_IN )
+        if ( byte == SLIP_END )
         {
-            recvBuffer[recvWrPtr] = byte;
-            recvCnt++;
-            recvWrPtr++;
-            if ( recvWrPtr == SER_IN )
-                recvWrPtr = 0;
-
-            /* track SLIP_END markers to maintain a count of full raw SLIP
-             * packets stored in the input buffer.
-             */
-            if ( byte == SLIP_END )
-            {
-                slip_raw_packet_cnt++;
-            }
+            slip_raw_packet_cnt++;
         }
     }
-
-    /* end of interrupt for Z80-SIO2 USART
-     */
-    outp(SIOCMDA, SIO_RETI);
 
     /* end of interrupt for 8259 controller
      */
     outp(PIC_OCW2, PIC_EOI);
+
+    /* signal serial receive on-line
+     */
+#if ( SLIP_HW_FLOW_CTRL == 1 )
+    byte = inp(UART_MCR) | UART_MCR_RTS;
+    outp(UART_MCR, byte);
+#endif
 }

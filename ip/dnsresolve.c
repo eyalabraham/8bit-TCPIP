@@ -53,7 +53,7 @@
 // DNS miscellaneous
 #define     DNS_PAYLOAD_SIZE        512             // Maximum for DNS over UDP
 #define     DNS_PORT                53
-#define     MY_PORT                 (30000+DNS_PORT)
+#define     MY_PORT                 (USER_PORT_RANGE+DNS_PORT)
 #define     DNS_REQUEST_TIMEOUT     5000            // 5 seconds
 
 #define     INTERNET_CLASS          1
@@ -160,7 +160,7 @@ dns_result_t dnsresolve_gethostbyaddr(ip4_addr_t resolve_ip, struct dns_resoluti
 }
 
 /*------------------------------------------------
- * dnsresolve_gethostbyname()
+ * dnsresolve_gethostbynameEx()
  *
  *  Perform a DNS query
  *
@@ -237,7 +237,7 @@ dns_result_t dnsresolve_gethostbynameEx(char *host_name,
     udp_init();
     dns = udp_new();
     assert(dns);
-    assert(udp_bind(dns, IP4_ADDR(10,0,0,19), MY_PORT) == ERR_OK);
+    assert(udp_bind(dns, local_host, MY_PORT) == ERR_OK);
     assert(udp_recv(dns, dnsresolve_response) == ERR_OK);
     lastDnsRequest = 0;
 

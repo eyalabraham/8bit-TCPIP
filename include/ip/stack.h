@@ -20,6 +20,8 @@
 /* -----------------------------------------
    IPv4 interface and utility functions
 ----------------------------------------- */
+#define     USER_PORT_RANGE     50000
+
 #define     stack_hton(x)       stack_ntoh(((uint16_t)x))
 #define     stack_htonl(x)      stack_ntohl(((uint32_t)x))
 #define     stack_checksum(p,l) stack_checksumEx(p,l,0UL)

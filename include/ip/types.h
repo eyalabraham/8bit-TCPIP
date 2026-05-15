@@ -378,7 +378,7 @@ struct net_interface_t                                          // general netwo
     uint32_t    recv;                                           // received frames count
     uint32_t    rxDrop;                                         // dropped frames count
     uint32_t    txDrop;                                         // dropped frames count
-    struct arp_tbl_t arpTable[ARP_TABLE_LENGTH];                // this isterface's ARP table
+    struct arp_tbl_t arpTable[ARP_TABLE_LENGTH];                // this interface's ARP table
     void       *state;                                          // pointer to interface's ethernet driver 'private' data
 
     ip4_err_t   (*output)(struct net_interface_t* const,        // packet output function with address resolution,

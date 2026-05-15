@@ -15,7 +15,7 @@ typedef enum                        // stack wide error codes
 {
     ERR_OK        =  0,             // no errors, result ok
     ERR_MEM       = -1,             // out of memory error, memory resource allocation error
-    ERR_DRV       = -2,             // an interface driver error occurred, like an SPI IO problem
+    ERR_DRV       = -2,             // an interface driver error occurred, like an SPI or Serial IO problem
     ERR_NETIF     = -3,             // network interface error
     ERR_MTU_EXD   = -4,             // MTU size exceeded
     ERR_ARP_FULL  = -5,             // ARP table is full, entry not added ( or one was discarded to add this one )

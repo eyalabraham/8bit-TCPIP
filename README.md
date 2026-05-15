@@ -7,11 +7,11 @@ were nicely documented, the examples and wiki were often out dated.
 LwIP 2.0.2 was too convoluted for my needs to support a simple Ethernet interface
 in my DOS environment, and within my home-brew multi-tasking executive https://github.com/eyalabraham/robotics/tree/master/smte
 The stack I decided to code borrows several implementation ideas from LwIP, while heavily adapting it
-to the modest requirements of my projects.
+to the modest requirements of my projects.  
 
 The structure of the code modules follows the OSI model, with as much flexibility as I thought
 would be useful. The framework can be extended for features such as more than one Ethernet interface,
-or varying amounts of resources dedicated to UDP or TCP connections, an ARP table size, etc.
+or varying amounts of resources dedicated to UDP or TCP connections, an ARP table size, etc.  
 
 Each module matches a layer in the OSI model, and 'plugs into' a common 'stack' module.
 The 'stack' module implements only IPv4, and supplies all the data structures and utilities 
@@ -19,7 +19,7 @@ that are used to run the stack such as: timers, setup/init code, network/host by
 The stack module follows the LwIP model of call-backs. This model fit my needs for running the stack
 in a single threaded environment with no OS. This stack will be able to run in my FlashLite NEC v25
 8bit SBC DOS or my home-brew multi-task executive (https://sites.google.com/site/eyalabraham/robotics#software).
-In both cases the stack will be running as an isolated single thread.
+In both cases the stack will be running as an isolated single thread.  
 
 A rough ASCII sketch of the architecture and associated files:
 ```
@@ -59,8 +59,8 @@ A rough ASCII sketch of the architecture and associated files:
  |                          | ~~~~~~~~~~~~                  |
  |                          | enc28j60.c        slipv25.c   |
  |                          | enc28j60.h        slipsio.c   |
- |                          | enc28j60-hw.h     slip.h      |
- |                          |                               |           link_output()
+ |                          | enc28j60-hw.h     slip16550.c |
+ |                          |                   slip.h      |           link_output()
  +--------------------------+-------------------------------+ <----- link_input()
 ```
 ## Sections
@@ -70,7 +70,7 @@ A rough ASCII sketch of the architecture and associated files:
  4. IPv4 Network layer
  5. Transport layer ICMP UDP and TCP
  6. Common stack components
- 7. frame, packet, datagram and segment
+ 7. Frame, packet, datagram and segment
  8. SLIP setup on Ubuntu Linux 16.04 LTS
  9. File list
 
@@ -79,13 +79,13 @@ The driver structure borrows a lot from the LwIP driver skeleton provided with t
 This is simply because I had the driver written for LwIP and chose to reuse the code more or less as is.
 The driver module contains two stack interface functions: link_output() and link_input().
 link_input() is called periodically by the network interface function interface_input(). The function checks
-the network device for any waiting packets and reads them into a buffer.
+the network device for any waiting packets and reads them into a buffer.  
 link_output() is a function that will be called by the stack when data packets need to be transmitted.
 link_output() is linked to the stack through the net_interface_t 'linkoutput' member,
 and is intended to send data as-is. When data packets need to be sent, and require address resolution (adding
 source and destination MAC addresses), the function linked to the 'output' member should be used; this function
 runs through address resolution first and then calls link_output() through 'linkoutput' member. This mode of
-operation is very much identical to LwIP.
+operation is very much identical to LwIP.  
 The link_state() function will test the link condition and return 'up' (1) or 'down' (0) condition. This function should
 also be called repeatedly from within the same loop as interface_input(), and the code should take action if link
 state has changed from the last poll.
@@ -96,7 +96,7 @@ There is a one-to-one relationship between driver and network interface because 
 functions for input and output will be accessed through a common net_interface_t structure.
 The network interface module (netif.c) exposes two functions: interface_init() and interface_input().
 The interface_init() function is used to initialize the interface. In my implementation it calls the driver
-function enc28j60Init() for the chip initialization.
+function enc28j60Init() for the chip initialization.  
 The interface_input() function will be used to poll for input packets. It will either return immediately if no
 packets are waiting to be read from the interface HW, or read a waiting packet and forward it up the stack.
 The function interface_input() should be called repeatedly in the main program inside an infinite loop so that
@@ -104,14 +104,14 @@ it can periodically poll the interface. There is no support for an interrupt dri
 
 ### 3. ARP
 The ARP module provides two basic functions: address resolution using ARP requests logged in an internal ARP table,
-and it filters ARP replies and IPv4 inputs for processing.
+and it filters ARP replies and IPv4 inputs for processing.  
 The ARP module includes a 'Gratuitous ARP' function that can be called at the users discretion.
 When packet output is required the arp_output() function is called from the ipv4 module. The function will
 attempt to resolve the destination IP address using the ARP table. If ARP table resolution fails, the ARP module
 will queue the packet and issue an ARP request. Once the reply to the request is returned the ARP cache table will be 
 consulted again and the queued packet will be sent. Packets queued while waiting for address resolution will
 be discarded if the IP address is not resolved within a preset time out. ARP module uses a timer to check for queue
-timeouts.
+timeouts.  
 The ARP cache table is maintained per interface and has a limited amount of slots. If the table fills and new
 ARP information needs to be inserted, then the oldest entry will be overwritten.
 The ARP module includes a cache clean-out procedure, that is triggered once every 1min. This process will remove stale
@@ -121,43 +121,43 @@ ARP entries older that 5min
 The ipv4 module is a rather simple implementation with two main functions: on packet input the module invokes the
 appropriate handler for ICMP, UDP or TCP. On packet output the module consults a routing table and selects the appropriate
 interface for sending it, then invokes the arp_output(). Note that when using SLIP ARP resolution is skipped and the packet
-sent directly. SLIP is a point to point connection and is not aware of network (MAC) addresses.
+sent directly. SLIP is a point to point connection and is not aware of network (MAC) addresses.  
 The module also includes an ICMP input handler. This handler is located here instead of in the ICMP module simply
 because the stack should always be able to respond to ping requests. The ICMP module implements optional outgoing PING
 functionality describe in #5.
 
 ### 5. Transport layer ICMP UDP and TCP
-  ICMP Ping
-    The ICMP module implements an ICMP outgoing Ping request. The usage is demonstrated in the ethtest.c program.
-    This functionality is implemented as a separate module to allow the user a choice of implementation.
-    As noted in #4, responses to incoming Pings are handled in the ipv4.c module and are 'built in' to the stack.
+**ICMP Ping**
+The ICMP module implements an ICMP outgoing Ping request. The usage is demonstrated in the ethtest.c program.
+This functionality is implemented as a separate module to allow the user a choice of implementation.
+As noted in #4, responses to incoming Pings are handled in the ipv4.c module and are 'built in' to the stack.  
     
-  UDP
-    The UDP module implementation follows a minimal implementation of the LwIP API calls that roughly match
-    the function calls in a typical socket interface: udp_new() (create a 'socket'), udp_close(),
-    udp_bind(), udp_sendto and udp_recv().
-    The receiver function does not block (can't do that here), it only registers a callback that will be invoked if a
-    datagram arrives and matches the IP/port binding.
-    The module provides another call for initializing UDP PCBs, which are Protocol Control Blocks, and for
-    linking in the UDP input handler with the ipv4 module packet input handling function.
+**UDP**
+The UDP module implementation follows a minimal implementation of the LwIP API calls that roughly match
+the function calls in a typical socket interface: udp_new() (create a 'socket'), udp_close(),
+udp_bind(), udp_sendto and udp_recv().  
+The receiver function does not block (can't do that here), it only registers a callback that will be invoked if a
+datagram arrives and matches the IP/port binding.  
+The module provides another call for initializing UDP PCBs, which are Protocol Control Blocks, and for
+linking in the UDP input handler with the ipv4 module packet input handling function.  
     
-  TCP
-    The TCP module is the most basic TCP implementation that closely follows the TCP RFC 793 and its errata.
-    The implementation also include select corrections and features from RFC 1122.
-    The first step was to get the TCP state-machine coded. I used the RFC and this resource as a reference:
-    <http://www.saminiir.com/lets-code-tcp-ip-stack-1-ethernet-arp/>. Next I implemented the receive and then the send
-    functions. The TCP module API is a combination of ideas from LwIP and the socket API formats, and borrows ideas from
-    the application interface suggested in RFC 793.
-    This TCP protocol does not support:
-    - Congestion control mechanisms, and is not a high performance implementation.
-    - 'urgent' data handling
-    - Selective acknowledgment mechanism
-    Segment retransmission logic is greatly simplified. I chose to queue one segment at a time, while waiting for that segment's
-    acknowledgment. Once a queued segment is acknowledged other data and/or SYN/FIN segments can be sent. The implementation
-    only queues segments that expect an acknowledgment; such as data, SYN and FIN segments. All other segments are sent
-    through without queuing; such as RST or simple ACK with no data in the segments.
-    The TCP implementation does not calculate RTT. Instead, a fixed RTT of 1sec is used, and retransmission wait time is doubled
-    every time a timer expires. The TCP attempts 10 retransmissions before aborting the connection with a RST.
+**TCP**
+The TCP module is the most basic TCP implementation that closely follows the TCP RFC 793 and its errata.
+The implementation also include select corrections and features from RFC 1122.  
+The first step was to get the TCP state-machine coded. I used the RFC and this resource as a reference:
+<http://www.saminiir.com/lets-code-tcp-ip-stack-1-ethernet-arp/>. Next I implemented the receive and then the send
+functions. The TCP module API is a combination of ideas from LwIP and the socket API formats, and borrows ideas from
+the application interface suggested in RFC 793.
+This TCP protocol does not support:
+- Congestion control mechanisms, and is not a high performance implementation.
+- 'urgent' data handling
+- Selective acknowledgment mechanism
+Segment retransmission logic is greatly simplified. I chose to queue one segment at a time, while waiting for that segment's
+acknowledgment. Once a queued segment is acknowledged other data and/or SYN/FIN segments can be sent. The implementation
+only queues segments that expect an acknowledgment; such as data, SYN and FIN segments. All other segments are sent
+through without queuing; such as RST or simple ACK with no data in the segments.  
+The TCP implementation does not calculate RTT. Instead, a fixed RTT of 1sec is used, and retransmission wait time is doubled
+every time a timer expires. The TCP attempts 10 retransmissions before aborting the connection with a RST.
 
 ### 6. Common stack components
 The IPv4 stack functions are typically separated according to the layer they act in. The ASCII diagram has the
@@ -165,25 +165,25 @@ module names listed in the appropriate stack locations.
 The stack has several utility functions that are common to most layers such as timers, buffer allocation, etc.,
 These common functions are located in the ip4stack.c module.
 
-Buffer allocation
-    I chose to use a very simple, probably also wasteful, buffer allocation schema.
-    The allocation is done from a statically provisioned (optionally a dynamic allocation) set of
-    buffers of a know fixed size. I chose 1536 bytes per buffer because it aligns with the CPU addressing,
-    and is large enough for a single Ethernet packet. This way there is no chaining of smaller buffers and processing is simpler.
-    There is one set of buffers for transmit and receive, and the count can be set in options.h header file.
-    Allocation is done from the pool of buffers with calls to pbuf_allocate() and pbuf_free() ;-)
-    The options account for a receive buffer count of 1 because the ENC28J60 interface has up to 8K byte of possible memory
-    buffering, out of which I provisioned 5K byte for receive frames and 3K byte (2 x frame sizes) for transmit buffer.
-    When using TCP the buffer count should be increased in order to avoid out of buffer/memory conditions. TCP connections,
-    such as HTTP, will open multiple connections simultaneously depending the number of elements on a web page (text, pictures, etc).
+**Buffer allocation**
+I chose to use a very simple, probably also wasteful, buffer allocation schema.
+The allocation is done from a statically provisioned (optionally a dynamic allocation) set of
+buffers of a know fixed size. I chose 1536 bytes per buffer because it aligns with the CPU addressing,
+and is large enough for a single Ethernet packet. This way there is no chaining of smaller buffers and processing is simpler.
+There is one set of buffers for transmit and receive, and the count can be set in options.h header file.
+Allocation is done from the pool of buffers with calls to pbuf_allocate() and pbuf_free() ;-)  
+The options account for a receive buffer count of 1 because the ENC28J60 interface has up to 8K byte of possible memory
+buffering, out of which I provisioned 5K byte for receive frames and 3K byte (2 x frame sizes) for transmit buffer.
+When using TCP the buffer count should be increased in order to avoid out of buffer/memory conditions. TCP connections,
+such as HTTP, will open multiple connections simultaneously depending the number of elements on a web page (text, pictures, etc).
 
-System time and timer functions
-    The stack module provides timer functionality through three function calls: reading system time ticks given in
-    1mili-sec interval stack_time(), set a timer with time-out and callback stack_set_timer(), and a timers management
-    function stack_timers().
-    stack_timers() should be called within a main-loop (similar to LwIP). This function will scan the list of timers
-    will call a predefined callback if the timeout expires. All timers are periodic, that is, once triggered the
-    timer will be reset to be re-triggered after another expiration of the timeout value.
+**System time and timer functions**
+The stack module provides timer functionality through three function calls: reading system time ticks given in
+1mili-sec interval stack_time(), set a timer with time-out and callback stack_set_timer(), and a timers management
+function stack_timers().  
+stack_timers() should be called within a main-loop (similar to LwIP). This function will scan the list of timers
+will call a predefined callback if the timeout expires. All timers are periodic, that is, once triggered the
+timer will be reset to be re-triggered after another expiration of the timeout value.
 
 ### 7. Frame, packet, datagram and segment
 ```
@@ -210,11 +210,11 @@ If not loaded add 'slip' to /etc/modules or manually load with:
 ```$ modprobe slip```
     Create a SLIP connection between serial port and sl0 with 'slattach':
 ```
-$ sudo slattach -d -L -p slip -s 19200 /dev/ttyS5
+$ sudo slattach -d -p slip -s 9600 /dev/ttyS4
 $ sudo ifconfig sl0 mtu 1500 up
 ```
 Sometimes needs:
-```$ tput reset > /dev/ttyS5```
+```$ tput reset > /dev/ttyS4```
 
 Check sl0 with: 
 ```$ ifconfig sl0```
@@ -222,83 +222,77 @@ Check sl0 with:
 Enable packet forwarding:
 ```$ sudo sysctl -w net.ipv4.ip_forward=1```
 
-Setup routing from eth0 to sl0 for 192.168.1.19 (this is the device's IP):
-```$ sudo ip route add to 192.168.1.19 dev sl0 scope host proto static```
+Setup routing from eth0 to sl0 for 192.168.1.X (this is the device's IP):
+```$ sudo ip route add to 192.168.1.X dev sl0 scope host proto static```
 
-Setup proxy ARP for 192.168.1.19 on eth0:
-```$ sudo arp -v -i eth0 -H ether -Ds 192.168.1.19 eth0 pub```
- 
+Setup proxy ARP for 192.168.1.X on eth0:
+```$ sudo arp -v -i eth0 -H ether -Ds 192.168.1.X eth0 pub```
+
 ### 9. File list
-README
-
-    This file
-
+Ethernet ARP protocol module.
+```
 arp.c
 arp.h
-
-    Ethernet ARP protocol module.
-       
+```
+Microchip ENC28J60 device driver and driver functions for read/write of data packets.
+```   
 enc28j60.c
 enc28j60.h
 enc28j60-hw.h
-
-    Microchip ENC28J60 device driver and driver functions for read/write of data packets.
-
+```
+Test program for the stack and a demonstration of function usage.
+```
 ethtest.c
-
-    Test program for the stack and a demonstration of function usage.
-
+```
+Defined stack wide error code enumeration type
+```
 error.h
-
-    defined stack wide error code enumeration type
-
+```
+Make helper file with file lists for build/compile
+```
 ipStackFiles.mk
-
-    Make helper file with file lists for build/compile
-    
+```
+IPv4 Network layer implementation module
+```
 ipv4.c
 ipv4.h
-
-    IPv4 Network layer implementation module
-
-netif.c
+```
+Data link and interface module. call HE initialization, link bring up and link level input/outputnetif.c
+```
 netif.h
-
-    Data link and interface module. call HE initialization, link bring up and
-    link level input/output
-
+```
+IP stack options borrowing from LwIP options files. The options header should be included with every IP stack code module and is required for building IP stack modules.
+```
 options.h
-
-    IP stack options borrowing from LwIP options files
-    The options header should be included with every IP stack code module and is
-    required for building IP stack modules.
-
+```
+SLIP drivers for NEC V25 UART, Z80-SIO2 USART, and 16550 (or 82C50) UART.
+SLIP RFC 1055: <https://tools.ietf.org/html/rfc1055>
+Wiki: <https://en.wikipedia.org/wiki/Serial_Line_Internet_Protocol>
+```
 slipv25.c
 slipsio.c
+slip16550.c
 slip.h
-
-    SLIP drivers for NEC V25 UART and Z80-SIO2 USART
-    SLIP RFC 1055: <https://tools.ietf.org/html/rfc1055>
-    Wiki: <https://en.wikipedia.org/wiki/Serial_Line_Internet_Protocol>
-
+```
+IPv4 stack code module and header file for common components and utility functions.
+```
 stack.c
 stack.h
-
-    IPv4 stack code module and header file for common components and utility functions.
-
+```
+TCP (very basic) protocol implementation.
+```
 tcp.c
 tcp.h
-
-    TCP protocol implementation.
-
+```
+UDP protocol implementation.
+```
 udp.c
 udp.h
-
-    UDP protocol implementation.
-
+```
+defines stack wide data types and data structures 
+```
 types.h
-
-    defines stack wide data types and data structures
+```
 
 ## To-Dos
 1.  Error handling

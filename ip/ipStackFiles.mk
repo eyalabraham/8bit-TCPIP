@@ -15,8 +15,12 @@ INTERFACE=$(IPDIR)/enc28j60.c \
 INTERFACESLIPV25=$(IPDIR)/slipv25.c \
 	$(IPDIR)/netif.c
 
-# SLIP driver and data link layer for PC-XT
+# SLIP driver for Z80-SIO UART and data link layer for PC-XT
 INTERFACESLIPSIO=$(IPDIR)/slipsio.c \
+	$(IPDIR)/netif.c
+
+# SLIP driver for 16550/82C50 UART and data link layer for PC-XT
+INTERFACESLIP16550=$(IPDIR)/slip16550.c \
 	$(IPDIR)/netif.c
 
 # Network layer

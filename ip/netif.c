@@ -75,7 +75,7 @@ ip4_err_t interface_init(struct net_interface_t* const netif)
      */
     if ( (netif->state = netif->driver_init()) != NULL )
     {
-        netif->flags |= (NETIF_FLAG_LINK_UP | NETIF_FLAG_UP);   // if ENC28J60 initializes properly then set state to link up
+        netif->flags |= (NETIF_FLAG_LINK_UP | NETIF_FLAG_UP);
         result = ERR_OK;
     }
 #endif
@@ -122,7 +122,7 @@ ip4_err_t interface_slip_init(struct net_interface_t* const netif)
      */
     if ( (netif->state = netif->driver_init()) != NULL )
     {
-        netif->flags |= (NETIF_FLAG_LINK_UP | NETIF_FLAG_UP);   // if ENC28J60 initializes properly then set state to link up
+        netif->flags |= (NETIF_FLAG_LINK_UP | NETIF_FLAG_UP);
         result = ERR_OK;
     }
     return result;
