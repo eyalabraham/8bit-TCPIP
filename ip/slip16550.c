@@ -20,7 +20,6 @@
 #endif
 
 #include    <string.h>
-#include    <malloc.h>
 #include    <assert.h>
 #include    <conio.h>
 #include    <i86.h>
@@ -397,7 +396,7 @@ struct pbuf_t* const slip_input(struct net_interface_t* const netif)
 
     if ( p != NULL )
     {
-        /* We know we have a raw packet waiting to be ready from the SLIP buffer.
+        /* We know we have a raw packet waiting to be read from the SLIP buffer.
          * Read the waiting packet into a pbuf buffer and set buffer length.
          * This is an IP packet! so offset it after the Ethernet frame header
          */

@@ -58,12 +58,12 @@
  * SLIP setup options
  *
  */
-#define     SLIP_ONLY           1           // set to '1' if only SLIP is used with no other interface
 #define     SLIP_NAME           "sl0\0"     // SLIP interface's identifier
 #define     SLIP_BAUD           9600        // valid rates on NEC V25: '9600' and '19200'
                                             // valid rates on PC-XT Z80-SIO: '4800','9600','19200','38400','57600'
                                             // valid rates on PC-XT 16550 UART: '4800','9600','19200'
 #define     SLIP_HW_FLOW_CTRL   1           // Set to '1' to enable serial RTS/CTS flow control
+                                            // use in device driver if interface hardware can support it.
                                             // 'slattach' default has no flow control, use -h swith to enable
 /*
  * Data Link layer setup options, buffers, ARP etc
@@ -73,6 +73,7 @@
 #define     ARP_QUEUE_LENGTH    ARP_QUEUE_BUFS
 #define     ARP_QUEUE_EXPR      600         // milisec time-out value for queued packets waiting for ARP response
 #define     ARP_CACHE_EXPR      300000UL    // 5min ARP cache expiration
+
 /*
  * Network layer setup options
  *

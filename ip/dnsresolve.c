@@ -21,6 +21,7 @@
 
 #include    "ip/netif.h"
 #include    "ip/stack.h"
+#include    "ip/ipv4.h"
 #include    "ip/udp.h"
 #include    "ip/error.h"
 #include    "ip/types.h"
@@ -178,6 +179,7 @@ dns_result_t dnsresolve_gethostbynameEx(char *host_name,
 
     struct net_interface_t *netif;
     struct udp_pcb_t       *dns;
+    struct netif_call_backs_t call_backs;
     int                     linkState;
     ip4_err_t               result;
     uint32_t                lastDnsRequest;
@@ -223,8 +225,15 @@ dns_result_t dnsresolve_gethostbynameEx(char *host_name,
     netif = stack_get_ethif(0);                         // get pointer to interface 0
     assert(netif);
 
-    assert(interface_slip_init(netif) == ERR_OK);       // initialize interface and link HW
-    interface_set_addr(netif, local_host,               // setup static IP addressing
+    call_backs.output = slip_output;                        // no address resolution is needed in SLIP, packet is sent directly
+    call_backs.forward_input = ip4_input;                   // for SLIP forward packet directly to IPv4 layer for processing
+    call_backs.linkinput = slip_input;                      // to be called to get waiting packet from the link interface
+    call_backs.linkoutput = NULL;                           // not needed with SLIP, IPv4 calls slip_output() through netif->output member
+    call_backs.driver_init = (void *(*)(void))slip_init;    // driver initialization function
+    call_backs.linkstate = slip_link_state;                 // link state from driver
+
+    assert(interface_init(netif, &call_backs) == ERR_OK);   // initialize interface and link HW
+    interface_set_addr(netif, local_host,                   // setup static IP addressing
                               net_mask,
                               gateway);
 

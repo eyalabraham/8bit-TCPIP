@@ -9,14 +9,12 @@
 *************************************************************************** */
 #define     __STDC_WANT_LIB_EXT1__  1               // safe library function calls
 
-#include    <malloc.h>
 #include    <assert.h>
 #include    <string.h>
 #include    <stdio.h>
 #include    <stdlib.h>
 
 #include    "ip/stack.h"
-#include    "ip/arp.h"
 #include    "ip/options.h"
 
 #if  SYSTEM_DOS
@@ -70,10 +68,6 @@ void stack_init(void)
         timers[i].last_trigger = 0;
         timers[i].timer_callback = NULL;
     }
-
-#if ( !SLIP_ONLY )
-    arp_init();
-#endif
 }
 
 /*------------------------------------------------

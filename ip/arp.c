@@ -8,7 +8,6 @@
 
 *************************************************************************** */
 
-#include    <malloc.h>
 #include    <string.h>
 #include    <assert.h>
 
@@ -61,6 +60,11 @@ void arp_init(void)
 
     stack_set_timer((ARP_QUEUE_EXPR/3), arp_queue_clr); // register ARP clean-up callback
     stack_set_timer((ARP_CACHE_EXPR/10), arp_cache_clr);
+
+    arp_tbl_entry(netif,                                // add loop-back IP address
+                IP4_ADDR(127,0,0,1),
+                netif->hwaddr,
+                ARP_FLAG_STATIC);
 }
 
 /* -----------------------------------------

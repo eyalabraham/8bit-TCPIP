@@ -102,6 +102,34 @@ packets are waiting to be read from the interface HW, or read a waiting packet a
 The function interface_input() should be called repeatedly in the main program inside an infinite loop so that
 it can periodically poll the interface. There is no support for an interrupt driven setup.
 
+Network interface initialization using ```interface_init()``` accepts a call-back structure that defines the call-back function to call for network interface functionality. This is a sample of how to set up the call-back structure:
+
+**For implementation using ARP**
+
+> Build and link the ARP module and include a call to ```arp_init()``` after initializing the interface.
+
+```
+call_backs.output = arp_output;                         // to be called when address resolution is required
+call_backs.forward_input = arp_input;                   // forward frame through ARP module for processing or forwarding to network layer
+call_backs.linkinput = link_input;                      // to be called to get waiting packet from the link interface
+call_backs.linkoutput = link_output;                    // to be called when as-is data needs to be sent, without address resolution
+call_backs.driver_init = (void *(*)(void))enc28j60Init; // driver initialization function
+call_backs.linkstate = link_state;                      // link state from driver
+```
+
+**For implementation not using ARP**
+
+> When using point-to-point link protocols such as SLIP or PLIP. No need to build and link the ARP module.
+
+```
+call_backs.output = slip_output;                        // no address resolution is needed in SLIP, packet is sent directly
+call_backs.forward_input = ip4_input;                   // for SLIP forward packet directly to IPv4 layer for processing
+call_backs.linkinput = slip_input;                      // to be called to get waiting packet from the link interface
+call_backs.linkoutput = NULL;                           // not needed with SLIP, IPv4 calls slip_output() through netif->output member
+call_backs.driver_init = (void *(*)(void))slip_init;    // driver initialization function
+call_backs.linkstate = slip_link_state;                 // link state from driver
+```
+
 ### 3. ARP
 The ARP module provides two basic functions: address resolution using ARP requests logged in an internal ARP table,
 and it filters ARP replies and IPv4 inputs for processing.  
