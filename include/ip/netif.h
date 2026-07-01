@@ -26,7 +26,7 @@ void        interface_set_addr(struct net_interface_t* const,       // setup int
 void        interface_set_mac(struct net_interface_t* const,        // setup interface's MAC address
                               hwaddr_t);
 void        interface_set_name(struct net_interface_t* const,       // setup interface's name string
-                               char*, int);
+                               char*);
 int         interface_link_state(struct net_interface_t* const);    // link state probe
 
 #endif /* __NETIF_H__ */

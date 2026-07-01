@@ -24,6 +24,7 @@
  */
 #define     HOSTNAME_LENGTH     10
 #define     HOSTNAME            "pcxt\0"
+#define     MTU                 1500
 
 #define     RX_BUFS             1           // # of input packet buffers, relying on device driver buffering
 #define     TX_BUFS             7           // # of output packet buffers
@@ -35,10 +36,9 @@
 #define     STACK_TIMER_COUNT   4           // timers that the stack manages (minimum of 3: 1 x TCP, 2 x ARP)
 
 /*
- * Physical layer setup options, Ethernet HW
+ * Ethernet HW options
  *
  */
-#define     ETHIF_NAME_LENGTH   5
 #define     ETHIF_NAME          "eth0\0"    // interface's identifier
 
 #define     MAC0                0x00        // my old USB wifi 'B' adapter (or can use: 00:e0:63:82:4b:e9)
@@ -52,8 +52,6 @@
 #define     INTERFACE_COUNT     1           // # of ethernet interfaces in the system
 #define     DRV_DMA_IO          0           // set to 1 for DMA based IO
 
-#define     MTU                 1500
-
 /*
  * SLIP setup options
  *
@@ -65,6 +63,26 @@
 #define     SLIP_HW_FLOW_CTRL   1           // Set to '1' to enable serial RTS/CTS flow control
                                             // use in device driver if interface hardware can support it.
                                             // 'slattach' default has no flow control, use -h swith to enable
+/*
+ * PLIP setup options
+ *
+ */
+#define     PLIP_NAME           "plip0\0"   // PLIP interface's identifier
+
+/* 
+ * Select between SLIP or PLIP interface
+ *
+ */
+#define     DO_SLIP             0           // for SLIP =1, for PLIP =0
+#define     DO_PLIP             !DO_SLIP
+#if DO_SLIP
+  #undef    ETHIF_NAME
+  #define   ETHIF_NAME          SLIP_NAME
+#elif DO_PLIP
+  #undef    ETHIF_NAME
+  #define   ETHIF_NAME          PLIP_NAME
+#endif
+
 /*
  * Data Link layer setup options, buffers, ARP etc
  *

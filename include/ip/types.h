@@ -358,6 +358,7 @@ struct pbuf_t
 /* -----------------------------------------
    Network interface
 ----------------------------------------- */
+#define     ETHIF_NAME_LENGTH       6
 #define     IF_FLAG_INIT            NETIF_FLAG_NONE
 #define     NETIF_FLAG_NONE         0x00                        // clear all flags
 #define     NETIF_FLAG_UP           0x01                        // interface is up (note: link may be down)

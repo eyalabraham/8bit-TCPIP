@@ -20,14 +20,17 @@
 #include    <assert.h>
 
 #include    "ip/netif.h"
+#include    "ip/arp.h"
 #include    "ip/stack.h"
 #include    "ip/ipv4.h"
 #include    "ip/udp.h"
 #include    "ip/error.h"
 #include    "ip/types.h"
 #include    "ip/dnsresolve.h"
+#include    "ip/options.h"
 
-#include    "ip/slip.h"     // TODO for slip_close(), remove once this is in a stack_close() call
+#include    "ip/slip.h"     // TODO for *lip_close(), remove once this is in a stack_close() call
+#include    "ip/plip.h"
 
 /* -----------------------------------------
    definitions
@@ -196,7 +199,8 @@ dns_result_t dnsresolve_gethostbynameEx(char *host_name,
     ip4_addr_t              temp_ipv4;
     ip4_addr_t              gateway = 0;
     ip4_addr_t              net_mask = 0;
-    ip4_addr_t              local_host = 0;
+    ip4_addr_t              local_iface = 0;
+    hwaddr_t                hw_address = {MAC0,MAC1,MAC2,MAC3,MAC4,MAC5};
 
     /* Initialize IP stack
      */
@@ -212,7 +216,7 @@ dns_result_t dnsresolve_gethostbynameEx(char *host_name,
         return DNS_STACK_ERR;
     }
 
-    if ( !stack_ip4addr_getenv("LOCALHOST", &local_host) )
+    if ( !stack_ip4addr_getenv("LOCALHOST", &local_iface) )
     {
         host_info->h_error = ERR_NETIF;
         return DNS_STACK_ERR;
@@ -225,15 +229,31 @@ dns_result_t dnsresolve_gethostbynameEx(char *host_name,
     netif = stack_get_ethif(0);                         // get pointer to interface 0
     assert(netif);
 
-    call_backs.output = slip_output;                        // no address resolution is needed in SLIP, packet is sent directly
-    call_backs.forward_input = ip4_input;                   // for SLIP forward packet directly to IPv4 layer for processing
+#if DO_PLIP
+    arp_init();
+
+    call_backs.output = arp_output;                         // to be called when address resolution is required
+    call_backs.forward_input = arp_input;                   // forward frame through ARP module for processing or forwarding to network layer
+    call_backs.linkinput = plip_input;                      // to be called to get waiting packet from the link interface
+    call_backs.linkoutput = plip_output;                    // to be called when as-is data needs to be sent, without address resolution
+    call_backs.driver_init = (void *(*)(void))plip_init;    // driver initialization function
+    call_backs.linkstate = plip_link_state;                 // link state from driver
+#elif DO_SLIP
+    call_backs.output = slip_output;                        // no address resolution is required
+    call_backs.forward_input = ip4_input;                   // forward frame directly to network layer
     call_backs.linkinput = slip_input;                      // to be called to get waiting packet from the link interface
-    call_backs.linkoutput = NULL;                           // not needed with SLIP, IPv4 calls slip_output() through netif->output member
+    call_backs.linkoutput = NULL;                           // to be called when as-is data needs to be sent, without address resolution
     call_backs.driver_init = (void *(*)(void))slip_init;    // driver initialization function
     call_backs.linkstate = slip_link_state;                 // link state from driver
+#else
+    #error Missing link definition of SLIP, PLIP, or Ethernet
+#endif
 
     assert(interface_init(netif, &call_backs) == ERR_OK);   // initialize interface and link HW
-    interface_set_addr(netif, local_host,                   // setup static IP addressing
+
+    interface_set_mac(netif, hw_address);                   // setup interface parameters
+    interface_set_name(netif, ETHIF_NAME);
+    interface_set_addr(netif, local_iface,
                               net_mask,
                               gateway);
 
@@ -246,7 +266,7 @@ dns_result_t dnsresolve_gethostbynameEx(char *host_name,
     udp_init();
     dns = udp_new();
     assert(dns);
-    assert(udp_bind(dns, local_host, MY_PORT) == ERR_OK);
+    assert(udp_bind(dns, local_iface, MY_PORT) == ERR_OK);
     assert(udp_recv(dns, dnsresolve_response) == ERR_OK);
     lastDnsRequest = 0;
 
@@ -404,7 +424,11 @@ dns_result_t dnsresolve_gethostbynameEx(char *host_name,
         }
     }
 
+#if DO_SLIP
     slip_close();
+#else
+    plip_close();
+#endif
 
     return gethostbynameEx_result;
 }

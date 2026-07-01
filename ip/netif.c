@@ -135,14 +135,15 @@ void interface_set_mac(struct net_interface_t* const netif,
  * This function sets up an interface's IP name string.
  *
  * param:  netif the network interface and three IP addresses,
- *         name string and string length.
+ *         name string.
  * return: none
  *
  */
 void interface_set_name(struct net_interface_t* const netif,
-                        char* name, int name_len)
+                        char* name)
 {
-    strncpy(netif->name, name, name_len);
+    strncpy(netif->name, name, ETHIF_NAME_LENGTH);
+    netif->name[(ETHIF_NAME_LENGTH - 1)] = 0;
 }
 
 /* -----------------------------------------

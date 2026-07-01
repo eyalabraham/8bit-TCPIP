@@ -23,6 +23,11 @@ INTERFACESLIPSIO=$(IPDIR)/slipsio.c \
 INTERFACESLIP16550=$(IPDIR)/slip16550.c \
 	$(IPDIR)/netif.c
 
+# PLIP driver for Mode 0 parallel port and data link layer for PC-XT
+INTERFACEPLIP=$(IPDIR)/plip.c \
+	$(IPDIR)/arp.c \
+	$(IPDIR)/netif.c
+
 # Network layer
 NETWORK=$(IPDIR)/ipv4.c
 

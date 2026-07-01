@@ -60,7 +60,9 @@ A rough ASCII sketch of the architecture and associated files:
  |                          | enc28j60.c        slipv25.c   |
  |                          | enc28j60.h        slipsio.c   |
  |                          | enc28j60-hw.h     slip16550.c |
- |                          |                   slip.h      |           link_output()
+ |                          |                   plip.c      |
+ |                          |                   slip.h      |
+ |                          |                   plip.h      |           link_output()
  +--------------------------+-------------------------------+ <----- link_input()
 ```
 ## Sections
@@ -119,7 +121,7 @@ call_backs.linkstate = link_state;                      // link state from drive
 
 **For implementation not using ARP**
 
-> When using point-to-point link protocols such as SLIP or PLIP. No need to build and link the ARP module.
+> When using point-to-point link protocols such as SLIP. No need to build and link the ARP module.
 
 ```
 call_backs.output = slip_output;                        // no address resolution is needed in SLIP, packet is sent directly
@@ -231,32 +233,69 @@ timer will be reset to be re-triggered after another expiration of the timeout v
 ```
 
 ### 8. SLIP setup on Ubuntu Linux
-Check that the SLIP kernel module is loaded: 
-``` $ lsmod | grep slip```
-
-If not loaded add 'slip' to /etc/modules or manually load with:
-```$ modprobe slip```
-    Create a SLIP connection between serial port and sl0 with 'slattach':
+> Requires a serial Null Modem cable between PC-XT and Linux host.
 ```
-$ sudo slattach -d -p slip -s 9600 /dev/ttyS4
-$ sudo ifconfig sl0 mtu 1500 up
+# Check that the SLIP kernel module is loaded: 
+lsmod | grep slip
+
+# If not loaded add 'slip' to /etc/modules or manually load with:
+modprobe slip
+
+# Create a SLIP connection between serial port and sl0 with 'slattach':
+sudo slattach -d -p slip -s 9600 /dev/ttyS4
+sleep 10
+sudo ifconfig sl0 mtu 1500 up
+
+# Sometimes needs
+tput reset > /dev/ttyS4
+
+# Check sl0 with
+ifconfig sl0
+
+# Enable packet forwarding
+sudo sysctl -w net.ipv4.ip_forward=1
+
+# Setup routing from eth0 to sl0 for 192.168.1.X (this is the device's IP)
+sudo ip route add to 192.168.1.X dev sl0 scope host proto static
+
+# Setup proxy ARP for 192.168.1.X on eth0
+$ sudo arp -v -i eth0 -H ether -Ds 192.168.1.X eth0 pub
 ```
-Sometimes needs:
-```$ tput reset > /dev/ttyS4```
+### 9. PLIP setup on Ubuntu Linux
+Requires a Parallel Transfer Mode 0 Cable between PC-XT and Linux host parallel ports.
+```
+                A -> B          A -> B
+    D0->ERROR   2 - 15          15 - 2
+    D1->SLCT    3 - 13          13 - 3
+    D2->PAPOUT  4 - 12          12 - 4
+    D3->ACK     5 - 10          10 - 5
+    D4->BUSY    6 - 11          11 - 6
 
-Check sl0 with: 
-```$ ifconfig sl0```
+                A <-> B
+    GROUND      25 - 25
+    -- All other pins a NOT connected
+```
+Linux host system setup commands
+```
+# Check for driver and load PLIP kernel module
+lsmod | grep plip
+sudo modprobe plip
 
-Enable packet forwarding:
-```$ sudo sysctl -w net.ipv4.ip_forward=1```
+# PLIP interface setup
+sudo ifconfig plip0 10.0.0.1 pointopoint 10.0.0.2 arp up
 
-Setup routing from eth0 to sl0 for 192.168.1.X (this is the device's IP):
-```$ sudo ip route add to 192.168.1.X dev sl0 scope host proto static```
+sudo sysctl -w net.ipv4.ip_forward=1
 
-Setup proxy ARP for 192.168.1.X on eth0:
-```$ sudo arp -v -i eth0 -H ether -Ds 192.168.1.X eth0 pub```
+# Masks internal IPs with whichever IP is currently on eno1
+sudo iptables -t nat -A POSTROUTING -o eno1 -j MASQUERADE
 
-### 9. File list
+# Allow packets to jump between your internal (plip0) and external (eno1) interfaces
+sudo iptables -A FORWARD -i plip0 -o eno1 -j ACCEPT
+
+# Allow return traffic from established and related connections back to the internal network
+sudo iptables -A FORWARD -i eno1 -o plip0 -m state --state RELATED,ESTABLISHED -j ACCEPT
+```
+### 10. File list
 Ethernet ARP protocol module.
 ```
 arp.c
@@ -285,8 +324,9 @@ IPv4 Network layer implementation module
 ipv4.c
 ipv4.h
 ```
-Data link and interface module. call HE initialization, link bring up and link level input/outputnetif.c
+Data link and interface module initialization, link bring up, and link level input/output
 ```
+netif.c
 netif.h
 ```
 IP stack options borrowing from LwIP options files. The options header should be included with every IP stack code module and is required for building IP stack modules.
@@ -301,6 +341,11 @@ slipv25.c
 slipsio.c
 slip16550.c
 slip.h
+```
+PLIP drivers
+```
+plip.c
+plip.h
 ```
 IPv4 stack code module and header file for common components and utility functions.
 ```
